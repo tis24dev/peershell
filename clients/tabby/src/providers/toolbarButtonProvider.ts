@@ -14,13 +14,23 @@ export class PeershellToolbarButtonProvider extends ToolbarButtonProvider {
     }
 
     provide(): ToolbarButton[] {
-        return [{
-            icon: SHARE_ICON,
-            title: 'Share terminal (peershell)',
-            weight: 8,
-            click: () => {
-                void this.peershell.shareActive()
+        return [
+            {
+                icon: SHARE_ICON,
+                title: 'Share terminal (peershell)',
+                weight: 8,
+                click: () => {
+                    void this.peershell.shareActive()
+                },
             },
-        }]
+            {
+                icon: SHARE_ICON,
+                title: 'Join shared terminal (peershell)',
+                weight: 9,
+                click: () => {
+                    void this.peershell.joinShared()
+                },
+            },
+        ]
     }
 }

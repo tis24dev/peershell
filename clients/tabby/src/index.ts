@@ -1,18 +1,35 @@
 /* eslint-disable @typescript-eslint/no-extraneous-class */
 import { NgModule } from '@angular/core'
-import { ConfigProvider, ToolbarButtonProvider, TabContextMenuItemProvider } from 'tabby-core'
+import { CommonModule } from '@angular/common'
+import { FormsModule } from '@angular/forms'
+import { NgbModule } from '@ng-bootstrap/ng-bootstrap'
+import { ToastrModule } from 'ngx-toastr'
+import TabbyCorePlugin, { ConfigProvider, ToolbarButtonProvider, TabContextMenuItemProvider } from 'tabby-core'
+import TabbyTerminalModule from 'tabby-terminal'
 
 import { PROTOCOL_VERSION } from '@peershell/protocol'
 import { PeershellConfigProvider } from './config'
 import { PeershellService } from './services/peershell.service'
 import { PeershellToolbarButtonProvider } from './providers/toolbarButtonProvider'
 import { PeershellContextMenu } from './providers/tabContextMenu'
+import { MirrorTabComponent } from './guest/mirrorTab.component'
 
 @NgModule({
+    imports: [
+        CommonModule,
+        FormsModule,
+        NgbModule,
+        ToastrModule,
+        TabbyCorePlugin,
+        TabbyTerminalModule,
+    ],
     providers: [
         { provide: ConfigProvider, useClass: PeershellConfigProvider, multi: true },
         { provide: ToolbarButtonProvider, useClass: PeershellToolbarButtonProvider, multi: true },
         { provide: TabContextMenuItemProvider, useClass: PeershellContextMenu, multi: true },
+    ],
+    declarations: [
+        MirrorTabComponent,
     ],
 })
 export default class PeershellModule {

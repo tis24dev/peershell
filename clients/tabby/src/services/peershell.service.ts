@@ -1,10 +1,12 @@
 import { Injectable } from '@angular/core'
 import { map } from 'rxjs'
-import { AppService, ConfigService, NotificationsService, BaseTabComponent } from 'tabby-core'
+import { NgbModal } from '@ng-bootstrap/ng-bootstrap'
+import { AppService, ConfigService, NotificationsService, BaseTabComponent, PromptModalComponent } from 'tabby-core'
 import { BaseTerminalTabComponent, ResizeEvent } from 'tabby-terminal'
-import { WebSocketTransport } from '@peershell/protocol'
+import { WebSocketTransport, normalizeRoomCode, isValidRoomCode } from '@peershell/protocol'
 
 import { ShareController, HostTerminal } from '../host/shareController'
+import { MirrorTabComponent } from '../guest/mirrorTab.component'
 
 /** Owns the active host shares and adapts a Tabby terminal tab to the transport-driven controller. */
 @Injectable({ providedIn: 'root' })
@@ -15,6 +17,7 @@ export class PeershellService {
         private readonly app: AppService,
         private readonly config: ConfigService,
         private readonly notifications: NotificationsService,
+        private readonly ngbModal: NgbModal,
     ) {}
 
     isSharing(tab: BaseTabComponent): boolean {
@@ -56,6 +59,49 @@ export class PeershellService {
             this.shares.delete(tab)
             this.notifications.error('peershell: could not connect to the server', String(err))
         }
+    }
+
+    async joinShared(): Promise<void> {
+        const serverUrl: string | null = this.config.store.peershell?.serverUrl
+        if (!serverUrl) {
+            this.notifications.error('peershell: set the server URL in settings first')
+            return
+        }
+        const room = await this.promptRoom()
+        if (!room) {
+            return
+        }
+        const transport = new WebSocketTransport()
+        try {
+            await transport.connect(serverUrl)
+        } catch (err) {
+            this.notifications.error('peershell: could not connect to the server', String(err))
+            return
+        }
+        this.app.openNewTab({
+            type: MirrorTabComponent,
+            inputs: {
+                transport,
+                room,
+                profile: { name: `peershell: ${room}`, type: 'peershell-mirror', options: {} },
+            },
+        })
+    }
+
+    private async promptRoom(): Promise<string | null> {
+        const modal = this.ngbModal.open(PromptModalComponent)
+        modal.componentInstance.prompt = 'Room code'
+        const result = await modal.result.catch(() => null)
+        const value: string | undefined = result?.value
+        if (!value) {
+            return null
+        }
+        const room = normalizeRoomCode(value)
+        if (!isValidRoomCode(room)) {
+            this.notifications.error('peershell: invalid room code')
+            return null
+        }
+        return room
     }
 
     stopSharing(tab: BaseTerminalTabComponent): void {
