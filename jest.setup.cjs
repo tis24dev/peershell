@@ -3,3 +3,9 @@
 if (!globalThis.crypto) {
     globalThis.crypto = require('crypto').webcrypto
 }
+if (!globalThis.btoa) {
+    globalThis.btoa = s => Buffer.from(s, 'binary').toString('base64')
+}
+if (!globalThis.atob) {
+    globalThis.atob = s => Buffer.from(s, 'base64').toString('binary')
+}

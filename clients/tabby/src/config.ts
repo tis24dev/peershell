@@ -1,0 +1,12 @@
+import { ConfigProvider } from 'tabby-core'
+
+export class PeershellConfigProvider extends ConfigProvider {
+    defaults = {
+        peershell: {
+            serverUrl: null,
+            magicLinkTtlMinutes: 15,
+        },
+    }
+
+    platformDefaults = {}
+}

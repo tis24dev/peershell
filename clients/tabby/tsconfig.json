@@ -15,10 +15,7 @@
     "baseUrl": ".",
     "lib": ["DOM", "ES2019", "ES2020"],
     "paths": {
-      "@peershell/protocol": ["../../shared/src"],
-      "tabby-core": ["../../../tabby/tabby-core/src"],
-      "tabby-terminal": ["../../../tabby/tabby-terminal/src"],
-      "tabby-settings": ["../../../tabby/tabby-settings/src"]
+      "@peershell/protocol": ["../../shared/src"]
     }
   },
   "angularCompilerOptions": {

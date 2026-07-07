@@ -1,17 +1,29 @@
-// Stage 0 smoke test: load the built UMD bundle the way Tabby would (nodeRequire), with the
-// externalized host packages stubbed, and instantiate the default NgModule. Confirms the bundle
-// is valid, @peershell/protocol is inlined, and the plugin constructs (logs) without a real Tabby.
-// Full GUI verification happens by loading dist/ into a real Tabby (see README).
+// Stage 0+ smoke test: load the built UMD bundle the way Tabby would (nodeRequire) with the
+// externalized host packages (@angular, tabby-*, rxjs, ...) generically stubbed, and instantiate
+// the default NgModule. Confirms the bundle is valid, @peershell/protocol is inlined, decorators
+// apply, and the plugin constructs (logs) without a real Tabby. Full GUI verification happens by
+// loading dist/ into a real Tabby (see README).
 const Module = require('module')
 const path = require('path')
 
-const stubs = {
-    '@angular/core': { NgModule: () => target => target },
+// A generic stub: any property access yields another stub; calling it (decorator factory) returns
+// an identity decorator; `new`-ing it or `extends`-ing it works.
+function makeStub() {
+    const f = function () {}
+    return new Proxy(f, {
+        get: (_t, p) => (typeof p === 'symbol' ? undefined : makeStub()),
+        apply: () => (target) => target,
+        construct: () => ({}),
+    })
 }
+
+const EXTERNAL_PREFIXES = ['@angular/', 'tabby-', 'rxjs', 'ngx-toastr', '@ng-bootstrap']
+const isExternal = req => EXTERNAL_PREFIXES.some(p => req === p || req.startsWith(p))
+
 const origLoad = Module._load
 Module._load = function (request, parent, isMain) {
-    if (Object.prototype.hasOwnProperty.call(stubs, request)) {
-        return stubs[request]
+    if (isExternal(request)) {
+        return makeStub()
     }
     return origLoad.call(this, request, parent, isMain)
 }
@@ -24,7 +36,6 @@ if (typeof PluginModule !== 'function') {
     process.exit(1)
 }
 
-// Instantiating triggers the module constructor's console.log.
 const instance = new PluginModule()
 if (!instance) {
     console.error('FAIL: could not instantiate the plugin module')
