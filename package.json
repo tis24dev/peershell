@@ -25,6 +25,7 @@
     "build:server": "npm run build -w @peershell/server",
     "build:all": "npm run build:shared && npm run build:web && npm run copy:web-asset && npm run build:tabby && npm run build:server",
     "watch:tabby": "npm run watch -w tabby-peershell",
-    "test": "npm run test --workspaces --if-present"
+    "test": "jest",
+    "test:smoke": "node clients/tabby/test/smoke-load.cjs"
   }
 }
