@@ -1,0 +1,12 @@
+node_modules/
+dist/
+typings/
+*.tsbuildinfo
+.webpack-cache/
+
+# Generated: web-client bundle embedded into the Tabby plugin (built from clients/web)
+clients/tabby/assets/web-client.html
+
+# Local env / secrets
+.env
+*.local

@@ -1,0 +1,14 @@
+{
+  "name": "@peershell/server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "peershell rendezvous + relay + reverse-tunnel + accounts (implemented in Stage 5)",
+  "license": "Apache-2.0",
+  "scripts": {
+    "build": "echo \"(server: implemented in Stage 5)\"",
+    "test": "echo \"(server: implemented in Stage 5)\""
+  },
+  "dependencies": {
+    "@peershell/protocol": "*"
+  }
+}

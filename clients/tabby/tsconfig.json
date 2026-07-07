@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "module": "es2015",
+    "target": "es2016",
+    "moduleResolution": "node",
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "strictNullChecks": true,
+    "noImplicitReturns": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "importHelpers": true,
+    "sourceMap": true,
+    "baseUrl": ".",
+    "lib": ["DOM", "ES2019", "ES2020"],
+    "paths": {
+      "@peershell/protocol": ["../../shared/src"],
+      "tabby-core": ["../../../tabby/tabby-core/src"],
+      "tabby-terminal": ["../../../tabby/tabby-terminal/src"],
+      "tabby-settings": ["../../../tabby/tabby-settings/src"]
+    }
+  },
+  "angularCompilerOptions": {
+    "strictTemplates": true,
+    "enableResourceInlining": true,
+    "strictInjectionParameters": true
+  },
+  "include": ["src"]
+}

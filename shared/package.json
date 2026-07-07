@@ -1,0 +1,18 @@
+{
+  "name": "@peershell/protocol",
+  "version": "0.1.0",
+  "description": "peershell wire protocol — framework-neutral, shared by all clients and the server",
+  "license": "Apache-2.0",
+  "repository": "https://github.com/tis24dev/peershell",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "watch": "tsc -p tsconfig.json --watch",
+    "test": "echo \"(shared: tests added in a later stage)\""
+  }
+}

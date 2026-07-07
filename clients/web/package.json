@@ -1,0 +1,14 @@
+{
+  "name": "@peershell/web-client",
+  "version": "0.1.0",
+  "private": true,
+  "description": "peershell standalone browser client (xterm.js) — served by the host over the tunnel",
+  "license": "Apache-2.0",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "echo \"(web-client: implemented in Stage 4)\""
+  },
+  "dependencies": {
+    "@peershell/protocol": "*"
+  }
+}
