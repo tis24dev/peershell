@@ -2,7 +2,7 @@ import { Component } from '@angular/core'
 import { NgbActiveModal } from '@ng-bootstrap/ng-bootstrap'
 import { AccountService, AccountApiResult } from './account.service'
 
-type Mode = 'account' | 'login' | 'register' | 'verify' | '2fa'
+type Mode = 'account' | 'login' | 'verify' | '2fa'
 
 const ERRORS: Record<string, string> = {
     'invalid-credentials': 'Email or password is not valid.',
@@ -34,19 +34,10 @@ const ERRORS: Record<string, string> = {
                 <div class="form-group"><label>Email</label>
                     <input class="form-control" type="email" [(ngModel)]="email" name="email" autofocus></div>
                 <div class="form-group"><label>Password</label>
-                    <input class="form-control" type="password" [(ngModel)]="password" name="password"></div>
-                <button class="btn btn-primary" type="submit" [disabled]="busy">Log in</button>
-                <button class="btn btn-link" type="button" [disabled]="busy" (click)="switch('register')">Create account</button>
-            </form>
-
-            <form *ngIf="mode === 'register'" (ngSubmit)="submitRegister()">
-                <div class="form-group"><label>Email</label>
-                    <input class="form-control" type="email" [(ngModel)]="email" name="email" autofocus></div>
-                <div class="form-group"><label>Password</label>
                     <input class="form-control" type="password" [(ngModel)]="password" name="password">
-                    <small class="form-text text-muted">At least 8 characters.</small></div>
-                <button class="btn btn-primary" type="submit" [disabled]="busy">Register</button>
-                <button class="btn btn-link" type="button" [disabled]="busy" (click)="switch('login')">Back to log in</button>
+                    <small class="form-text text-muted">At least 8 characters (for a new account).</small></div>
+                <button class="btn btn-primary" type="submit" [disabled]="busy">Log in</button>
+                <button class="btn btn-outline-primary ml-2" type="button" [disabled]="busy" (click)="submitRegister()">Create account</button>
             </form>
 
             <form *ngIf="mode === 'verify'" (ngSubmit)="submitVerify()">
