@@ -3,11 +3,10 @@ import { map } from 'rxjs'
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap'
 import { AppService, ConfigService, NotificationsService, BaseTabComponent, PromptModalComponent } from 'tabby-core'
 import { BaseTerminalTabComponent, ResizeEvent } from 'tabby-terminal'
-import { WebSocketTransport, normalizeRoomCode, isValidRoomCode, generatePin } from '@peershell/protocol'
+import { WebSocketTransport, normalizeRoomCode, isValidRoomCode, generatePin, PinProvider } from '@peershell/protocol'
 
 import { ShareController, HostTerminal } from '../host/shareController'
 import { MirrorTabComponent } from '../guest/mirrorTab.component'
-import { PinProvider } from '../guest/mirrorController'
 
 /** Owns the active host shares and adapts a Tabby terminal tab to the transport-driven controller. */
 @Injectable({ providedIn: 'root' })

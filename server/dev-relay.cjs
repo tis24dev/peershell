@@ -30,10 +30,46 @@ function startRelay(port = 0) {
         let boundPort = port
         const rooms = new Map() // room -> { host, guest }
         const tokens = new Map() // token -> room
+        const pendingHttp = new Map() // reqId -> http res (browser waiting for the tunneled page)
 
-        const server = http.createServer((_req, res) => {
-            res.writeHead(200, { 'content-type': 'text/plain' })
-            res.end('peershell dev relay\n')
+        function resolveHttp(msg) {
+            const res = pendingHttp.get(msg.reqId)
+            if (res) {
+                pendingHttp.delete(msg.reqId)
+                res.writeHead(msg.status || 200, msg.headers || {})
+                res.end(Buffer.from(msg.bodyBase64 || '', 'base64'))
+            }
+        }
+
+        // Reverse HTTP tunnel: GET /s/<token> is forwarded to the host as an http-get frame; the
+        // host answers with http-response (intercepted below) which we return to the browser.
+        const server = http.createServer((req, res) => {
+            const m = /^\/s\/([^/?#]+)/.exec(req.url || '')
+            if (!m) {
+                res.writeHead(200, { 'content-type': 'text/plain' })
+                res.end('peershell dev relay\n')
+                return
+            }
+            const room = tokens.get(m[1])
+            const entry = room && rooms.get(room)
+            if (!entry || !entry.host) {
+                res.writeHead(404)
+                res.end('unknown session')
+                return
+            }
+            const reqId = crypto.randomBytes(6).toString('hex')
+            pendingHttp.set(reqId, res)
+            entry.host.send(JSON.stringify({ v: 1, t: 'http-get', peerId: 0, reqId, path: '/' }))
+            const to = setTimeout(() => {
+                if (pendingHttp.has(reqId)) {
+                    pendingHttp.delete(reqId)
+                    res.writeHead(504)
+                    res.end('tunnel timeout')
+                }
+            }, 5000)
+            if (typeof to.unref === 'function') {
+                to.unref()
+            }
         })
         const wss = new WebSocketServer({ server })
 
@@ -49,21 +85,32 @@ function startRelay(port = 0) {
             sock._peer = null
 
             sock.on('message', (data, isBinary) => {
-                // Once paired, the relay is blind: forward everything to the peer.
-                if (sock._peer) {
-                    safeSend(sock._peer, isBinary ? data : data.toString(), isBinary)
-                    return
-                }
                 if (isBinary) {
-                    return // no binary before pairing
-                }
-                let msg
-                try {
-                    msg = JSON.parse(data.toString())
-                } catch {
+                    if (sock._peer) {
+                        safeSend(sock._peer, data, true)
+                    }
                     return
                 }
-                handleSignal(sock, msg)
+                const text = data.toString()
+                let msg = null
+                try {
+                    msg = JSON.parse(text)
+                } catch {
+                    /* ignore non-JSON text */
+                }
+                // http-response is relay-directed (answers a tunneled page request), never forwarded.
+                if (msg && msg.t === 'http-response') {
+                    resolveHttp(msg)
+                    return
+                }
+                // Once paired, the relay is blind: forward everything else to the peer.
+                if (sock._peer) {
+                    safeSend(sock._peer, text, false)
+                    return
+                }
+                if (msg) {
+                    handleSignal(sock, msg)
+                }
             })
 
             sock.on('close', () => {

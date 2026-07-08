@@ -1,7 +1,7 @@
 import {
+    MirrorController, MirrorSink, PinProvider,
     SessionTransport, ControlMessage, BinaryPayload, Channel, TransportState, utf8ToBase64, hashPin,
-} from '@peershell/protocol'
-import { MirrorController, MirrorSink, PinProvider } from '../src/guest/mirrorController'
+} from '../src'
 
 class MockTransport implements SessionTransport {
     sentControl: ControlMessage[] = []

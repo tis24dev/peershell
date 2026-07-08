@@ -1,9 +1,8 @@
 import { Component, Injector, Input } from '@angular/core'
 import { BaseTerminalTabComponent } from 'tabby-terminal'
-import { SessionTransport } from '@peershell/protocol'
+import { SessionTransport, PinProvider } from '@peershell/protocol'
 
 import { MirrorSession } from './mirrorSession'
-import { PinProvider } from './mirrorController'
 
 /**
  * Guest tab that renders a mirrored remote terminal. Reuses BaseTerminalTabComponent's template so

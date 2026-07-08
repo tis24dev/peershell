@@ -1,16 +1,17 @@
 /**
- * Guest side of a shared session. Tabby-agnostic (drives a SessionTransport + a small MirrorSink
- * port + a PIN provider), so it is fully unit-testable and reusable by the web-client / mobile later.
- * MirrorSession adapts it to a Tabby BaseSession.
+ * Guest side of a shared session. Framework-neutral (drives a SessionTransport + a small MirrorSink
+ * port + a PIN provider), so it is reused by the Tabby plugin (via MirrorSession) and the web-client
+ * (and future mobile). PIN/render/input logic lives here once.
  *
  * Flow: join -> answer the host's PIN challenge -> on pin-ok, render the snapshot then ack it
  * (barrier) -> render live output, forward the guest's keystrokes.
  */
-import {
-    SessionTransport, ControlMessage, Channel, ClientKind, SINGLE_PEER, base64ToBytes, hashPin,
-} from '@peershell/protocol'
+import { Channel, ClientKind, SINGLE_PEER, ControlMessage } from './protocol'
+import { SessionTransport } from './api'
+import { base64ToBytes } from './base64'
+import { hashPin } from './pinAuth'
 
-/** Port the controller drives on the guest terminal (adapted from a Tabby session). */
+/** Port the controller drives on the guest terminal (adapted from a Tabby session or an xterm). */
 export interface MirrorSink {
     emit(data: Uint8Array): void
     hostResize(cols: number, rows: number): void
@@ -40,7 +41,7 @@ export class MirrorController {
     /** Announce as a guest and join the room. Handlers are wired in the ctor so no frame is missed. */
     join(room: string, opts: { name?: string, kind?: ClientKind } = {}): void {
         this.transport.sendControl({
-            t: 'hello', role: 'guest', kind: opts.kind ?? 'desktop', client: 'tabby-peershell',
+            t: 'hello', role: 'guest', kind: opts.kind ?? 'desktop', client: 'peershell',
         })
         this.transport.sendControl({ t: 'join', room, name: opts.name })
     }

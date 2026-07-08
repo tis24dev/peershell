@@ -2,9 +2,7 @@ import { Injector } from '@angular/core'
 import { Observable, Subject } from 'rxjs'
 import { LogService } from 'tabby-core'
 import { BaseSession, UTF8SplitterMiddleware } from 'tabby-terminal'
-import { SessionTransport } from '@peershell/protocol'
-
-import { MirrorController, MirrorSink, PinProvider } from './mirrorController'
+import { SessionTransport, MirrorController, MirrorSink, PinProvider } from '@peershell/protocol'
 
 /**
  * A "fake shell" session backing the guest mirror tab. Inbound frames become terminal output via

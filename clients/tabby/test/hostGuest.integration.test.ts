@@ -5,9 +5,8 @@
  */
 import WebSocket from 'ws'
 import { Subject } from 'rxjs'
-import { WebSocketTransport, WebSocketCtor } from '@peershell/protocol'
+import { WebSocketTransport, WebSocketCtor, MirrorController, MirrorSink } from '@peershell/protocol'
 import { ShareController, HostTerminal } from '../src/host/shareController'
-import { MirrorController, MirrorSink } from '../src/guest/mirrorController'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { startRelay } = require('../../../server/dev-relay.cjs') as {
