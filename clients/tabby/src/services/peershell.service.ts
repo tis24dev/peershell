@@ -179,7 +179,17 @@ export class PeershellService {
         return false
     }
 
-    /** Opens the account modal (login / register / 2FA / logout). Used by the toolbar button. */
+    /** Toolbar entry: pops a native dropdown menu with the peershell actions. */
+    openMenu(): void {
+        this.platform.popupContextMenu([
+            { label: 'Share this terminal', click: () => { void this.shareActive() } },
+            { label: 'Join a shared terminal', click: () => { void this.joinShared() } },
+            { type: 'separator' },
+            { label: this.account.isLoggedIn() ? 'Account / log out' : 'Log in', click: () => { this.openAccount() } },
+        ])
+    }
+
+    /** Opens the account modal (login / register / 2FA / logout). */
     openAccount(): void {
         this.ngbModal.open(LoginModalComponent)
     }

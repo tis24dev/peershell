@@ -99,6 +99,7 @@ declare module 'tabby-core' {
 
     export class PlatformService {
         showMessageBox(options: MessageBoxOptions): Promise<MessageBoxResult>
+        popupContextMenu(menu: MenuItemOptions[], event?: MouseEvent): void
     }
 }
 
