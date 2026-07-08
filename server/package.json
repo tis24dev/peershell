@@ -2,13 +2,15 @@
   "name": "@peershell/server",
   "version": "0.1.0",
   "private": true,
-  "description": "peershell rendezvous + relay + reverse-tunnel + accounts (implemented in Stage 5)",
+  "description": "peershell rendezvous + blind relay + reverse HTTP tunnel (MVP; accounts/dashboard in Stage 6)",
   "license": "Apache-2.0",
+  "main": "src/index.cjs",
   "scripts": {
-    "build": "echo \"(server: implemented in Stage 5)\"",
-    "test": "echo \"(server: implemented in Stage 5)\""
+    "start": "node src/index.cjs",
+    "build": "echo \"(server: plain CJS, no build step)\"",
+    "test": "echo \"(server: covered by shared/ + clients/tabby integration tests)\""
   },
   "dependencies": {
-    "@peershell/protocol": "*"
+    "ws": "^8.18.0"
   }
 }

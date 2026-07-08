@@ -8,7 +8,7 @@ import WebSocket from 'ws'
 import { WebSocketTransport, WebSocketCtor, HttpTunnelHandler } from '../src'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { startRelay } = require('../../server/dev-relay.cjs') as {
+const { startRelay } = require('../../server/src/index.cjs') as {
     startRelay: (port?: number) => Promise<{ url: string, close: () => Promise<void> }>
 }
 

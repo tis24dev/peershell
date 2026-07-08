@@ -9,7 +9,7 @@ import { WebSocketTransport, WebSocketCtor, MirrorController, MirrorSink } from 
 import { ShareController, HostTerminal } from '../src/host/shareController'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { startRelay } = require('../../../server/dev-relay.cjs') as {
+const { startRelay } = require('../../../server/src/index.cjs') as {
     startRelay: (port?: number) => Promise<{ url: string, close: () => Promise<void> }>
 }
 

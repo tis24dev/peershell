@@ -10,7 +10,7 @@ import { Channel } from '../src/protocol'
 import { hashPin, verifyPin, generateNonce } from '../src/pinAuth'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { startRelay } = require('../../server/dev-relay.cjs') as {
+const { startRelay } = require('../../server/src/index.cjs') as {
     startRelay: (port?: number) => Promise<{ port: number, url: string, close: () => Promise<void> }>
 }
 
