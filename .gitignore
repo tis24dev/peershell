@@ -10,3 +10,7 @@ clients/tabby/assets/web-client.html
 # Local env / secrets
 .env
 *.local
+
+# local plugin packaging artifacts (Windows install)
+build/
+tabby-peershell.zip
