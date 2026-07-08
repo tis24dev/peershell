@@ -13,6 +13,7 @@ import { PeershellService } from './services/peershell.service'
 import { PeershellToolbarButtonProvider } from './providers/toolbarButtonProvider'
 import { PeershellContextMenu } from './providers/tabContextMenu'
 import { MirrorTabComponent } from './guest/mirrorTab.component'
+import { LoginModalComponent } from './account/login-modal.component'
 
 @NgModule({
     imports: [
@@ -30,6 +31,7 @@ import { MirrorTabComponent } from './guest/mirrorTab.component'
     ],
     declarations: [
         MirrorTabComponent,
+        LoginModalComponent,
     ],
 })
 export default class PeershellModule {

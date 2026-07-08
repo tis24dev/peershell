@@ -9,6 +9,8 @@ import {
 
 import { ShareController, HostTerminal } from '../host/shareController'
 import { MirrorTabComponent } from '../guest/mirrorTab.component'
+import { AccountService } from '../account/account.service'
+import { LoginModalComponent } from '../account/login-modal.component'
 import webClientHtml from '../../assets/web-client.html'
 
 /** Owns the active host shares and adapts a Tabby terminal tab to the transport-driven controller. */
@@ -21,6 +23,7 @@ export class PeershellService {
         private readonly config: ConfigService,
         private readonly notifications: NotificationsService,
         private readonly ngbModal: NgbModal,
+        private readonly account: AccountService,
     ) {}
 
     isSharing(tab: BaseTabComponent): boolean {
@@ -46,6 +49,17 @@ export class PeershellService {
             return
         }
 
+        // Sharing is gated behind a logged-in account: the account token authenticates the outbound
+        // connection so the server accepts create-session (open servers must not let anyone share).
+        let token = this.account.getToken()
+        if (!token) {
+            token = await this.openLogin()
+            if (!token) {
+                this.notifications.error('peershell: log in to share a terminal')
+                return
+            }
+        }
+
         // Per-session PIN, generated locally and shown to the host. Never sent to the server in
         // cleartext (challenge-response only). The host shares it with the intended guest out-of-band.
         const pin = generatePin(6)
@@ -59,14 +73,21 @@ export class PeershellService {
             onAuthenticated: () => this.notifications.notice('peershell: guest connected'),
             onPinFailed: () => this.notifications.error('peershell: guest failed the PIN'),
             onPeerLeft: () => this.notifications.notice('peershell: peer disconnected'),
-            onError: (code, message) => this.notifications.error(`peershell: ${code}`, message),
+            onError: (code, message) => {
+                if (code === 'unauthorized') {
+                    void this.account.clearLocal()
+                    this.notifications.error('peershell: session expired — log in and share again')
+                } else {
+                    this.notifications.error(`peershell: ${code}`, message)
+                }
+            },
         })
 
         this.shares.set(tab, controller)
         tab.destroyed$.subscribe(() => this.shares.delete(tab))
 
         try {
-            await controller.start(serverUrl)
+            await controller.start(serverUrl, token)
         } catch (err) {
             this.shares.delete(tab)
             this.notifications.error('peershell: could not connect to the server', String(err))
@@ -125,6 +146,17 @@ export class PeershellService {
         const result = await modal.result.catch(() => null)
         const value: string | undefined = result?.value
         return value ? value.trim() : null
+    }
+
+    /** Opens the account modal (login / register / 2FA / logout). Used by the toolbar button. */
+    openAccount(): void {
+        this.ngbModal.open(LoginModalComponent)
+    }
+
+    /** Opens the login modal, resolving with the bearer token on success or null if cancelled. */
+    private async openLogin(): Promise<string | null> {
+        const modal = this.ngbModal.open(LoginModalComponent)
+        return await modal.result.catch(() => null)
     }
 
     stopSharing(tab: BaseTerminalTabComponent): void {

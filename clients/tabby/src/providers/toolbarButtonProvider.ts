@@ -31,6 +31,14 @@ export class PeershellToolbarButtonProvider extends ToolbarButtonProvider {
                     void this.peershell.joinShared()
                 },
             },
+            {
+                icon: SHARE_ICON,
+                title: 'peershell account (log in / out)',
+                weight: 10,
+                click: () => {
+                    this.peershell.openAccount()
+                },
+            },
         ]
     }
 }
