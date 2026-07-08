@@ -5,6 +5,8 @@ export class PeershellConfigProvider extends ConfigProvider {
         peershell: {
             serverUrl: null,
             magicLinkTtlMinutes: 15,
+            disclaimerAck: false,
+            account: null,
         },
     }
 

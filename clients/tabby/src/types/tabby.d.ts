@@ -82,6 +82,24 @@ declare module 'tabby-core' {
         value: string
         password: boolean
     }
+
+    export interface MessageBoxOptions {
+        type?: string
+        message: string
+        detail?: string
+        buttons?: string[]
+        defaultId?: number
+        cancelId?: number
+    }
+
+    export interface MessageBoxResult {
+        response: number
+        checkboxChecked?: boolean
+    }
+
+    export class PlatformService {
+        showMessageBox(options: MessageBoxOptions): Promise<MessageBoxResult>
+    }
 }
 
 declare module 'tabby-terminal' {

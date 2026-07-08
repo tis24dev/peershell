@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core'
 import { map } from 'rxjs'
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap'
-import { AppService, ConfigService, NotificationsService, BaseTabComponent, PromptModalComponent } from 'tabby-core'
+import { AppService, ConfigService, NotificationsService, BaseTabComponent, PromptModalComponent, PlatformService } from 'tabby-core'
 import { BaseTerminalTabComponent, ResizeEvent } from 'tabby-terminal'
 import {
     WebSocketTransport, normalizeRoomCode, isValidRoomCode, generatePin, PinProvider, HttpTunnelHandler,
@@ -24,6 +24,7 @@ export class PeershellService {
         private readonly notifications: NotificationsService,
         private readonly ngbModal: NgbModal,
         private readonly account: AccountService,
+        private readonly platform: PlatformService,
     ) {}
 
     isSharing(tab: BaseTabComponent): boolean {
@@ -41,6 +42,9 @@ export class PeershellService {
 
     async startSharing(tab: BaseTerminalTabComponent): Promise<void> {
         if (this.shares.has(tab)) {
+            return
+        }
+        if (!(await this.confirmDisclaimer())) {
             return
         }
         const serverUrl: string | null = this.config.store.peershell?.serverUrl
@@ -146,6 +150,33 @@ export class PeershellService {
         const result = await modal.result.catch(() => null)
         const value: string | undefined = result?.value
         return value ? value.trim() : null
+    }
+
+    /**
+     * One-time no-E2E disclosure before the first share: guests get a read-write shell and the relay
+     * sees traffic in clear text. Acknowledged once, remembered in config.
+     */
+    private async confirmDisclaimer(): Promise<boolean> {
+        if (this.config.store.peershell?.disclaimerAck) {
+            return true
+        }
+        const r = await this.platform.showMessageBox({
+            type: 'warning',
+            message: 'Share this terminal with peershell?',
+            detail: 'Guests get full read-write access to this shell. The relay server sees all terminal '
+                + 'traffic in clear text — there is no end-to-end encryption yet. Do not share sensitive '
+                + 'sessions on a server you do not trust; self-host the server in production.',
+            buttons: ['Share', 'Cancel'],
+            defaultId: 1,
+            cancelId: 1,
+        })
+        if (r.response === 0) {
+            this.config.store.peershell = this.config.store.peershell || {}
+            this.config.store.peershell.disclaimerAck = true
+            await this.config.save()
+            return true
+        }
+        return false
     }
 
     /** Opens the account modal (login / register / 2FA / logout). Used by the toolbar button. */

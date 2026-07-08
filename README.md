@@ -24,7 +24,7 @@ planned behind the same transport interface.
 shared/          @peershell/protocol — TS-only, framework-neutral wire protocol (published to npm)
 clients/tabby/   tabby-peershell     — the Tabby plugin (Angular/Electron); all Tabby-specific code
 clients/web/     @peershell/web-client — standalone browser client (xterm.js), embedded + served by host
-server/          @peershell/server   — rendezvous + relay + tunnel + accounts (implemented later)
+server/          @peershell/server   — rendezvous + relay + tunnel + accounts (register/login/2FA)
 ```
 
 > This repo uses **npm workspaces** (npm >= 9). It is independent of Tabby's package manager: the plugin
@@ -49,6 +49,24 @@ ln -s /opt/peershell/clients/tabby ~/.config/tabby/plugins/node_modules/tabby-pe
 # option B: dev env var (from a Tabby source checkout)
 TABBY_DEV=1 TABBY_PLUGINS=/opt/peershell/clients/tabby yarn start
 ```
+
+## Server configuration (env)
+
+`server/src/index.cjs` is a single stdlib file (only `ws`). Configure it via environment variables:
+
+| var | default | purpose |
+|-----|---------|---------|
+| `PORT` / `BIND` | `8787` / `0.0.0.0` | listen address |
+| `PUBLIC_URL` | (derived) | base for minted magic-links, e.g. `https://panel.peershell.dev` |
+| `PEERSHELL_DATA` | `server/data` | dir for `accounts.json` (atomic, mode 0600) |
+| `TOKEN_TTL_MS` | 15 min | magic-link lifetime |
+| `BREVO_API_KEY` | (unset) | Brevo transactional API key; unset ⇒ verification codes are logged instead of emailed |
+| `EMAIL_FROM` / `EMAIL_FROM_NAME` | `noreply@peershell.dev` / `peershell` | verification sender |
+
+`create-session` is gated behind a valid account token; open registration requires email verification.
+Email is relayed through **Brevo** (not direct VM SMTP) so the VM IP stays out of the sending path.
+Authorise the domain in Brevo and add its **DKIM** records plus SPF (`include:spf.brevo.com`) and a
+`_dmarc` policy to the domain's DNS so mail is authenticated.
 
 ## Publishing
 
