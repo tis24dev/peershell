@@ -40,7 +40,7 @@ export class MirrorSession extends BaseSession {
 
     async start(_options?: unknown): Promise<void> {
         this.open = true
-        this.controller.join(this.room)
+        this.controller.join({ room: this.room })
     }
 
     write(data: Buffer): void {

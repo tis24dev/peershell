@@ -76,7 +76,7 @@ it('answers the PIN challenge with H(pin, nonce)', async () => {
     const t = new MockTransport()
     const s = mockSink()
     const c = new MirrorController(t, s.sink, async () => '424242')
-    c.join('ABC234')
+    c.join({ room: 'ABC234' })
     expect(t.controlTypes()).toEqual(['hello', 'join'])
 
     t.emitControl({ t: 'pin-challenge', nonce: 'nonce-xyz' })
@@ -88,7 +88,7 @@ it('renders + acks the snapshot, renders output, forwards input', () => {
     const t = new MockTransport()
     const s = mockSink()
     const c = new MirrorController(t, s.sink, noPin)
-    c.join('ABC234')
+    c.join({ room: 'ABC234' })
 
     t.emitControl({ t: 'snapshot', cols: 100, rows: 30, data: utf8ToBase64('SNAP') })
     expect(dec(s.emits[0])).toBe('SNAP')
@@ -107,7 +107,7 @@ it('ends on pin-fail with no attempts left, but not while attempts remain', () =
     const t = new MockTransport()
     const s = mockSink()
     const c = new MirrorController(t, s.sink, noPin)
-    c.join('ABC234')
+    c.join({ room: 'ABC234' })
 
     t.emitControl({ t: 'pin-fail', left: 3 })
     expect(s.getEnded()).toBeNull()
@@ -120,7 +120,7 @@ it('surfaces a host resize and ends on peer-left (once)', () => {
     const t = new MockTransport()
     const s = mockSink()
     const c = new MirrorController(t, s.sink, noPin)
-    c.join('ABC234')
+    c.join({ room: 'ABC234' })
 
     t.emitControl({ t: 'resize', cols: 132, rows: 43 })
     expect(s.resizes.at(-1)).toEqual({ cols: 132, rows: 43 })

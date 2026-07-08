@@ -38,12 +38,15 @@ export class MirrorController {
         })
     }
 
-    /** Announce as a guest and join the room. Handlers are wired in the ctor so no frame is missed. */
-    join(room: string, opts: { name?: string, kind?: ClientKind } = {}): void {
+    /**
+     * Announce as a guest and join, either by `room` code (Tabby desktop) or opaque `token`
+     * (browser magic-link). Handlers are wired in the ctor so no frame is missed.
+     */
+    join(target: { room?: string, token?: string, name?: string, kind?: ClientKind }): void {
         this.transport.sendControl({
-            t: 'hello', role: 'guest', kind: opts.kind ?? 'desktop', client: 'peershell',
+            t: 'hello', role: 'guest', kind: target.kind ?? 'desktop', client: 'peershell',
         })
-        this.transport.sendControl({ t: 'join', room, name: opts.name })
+        this.transport.sendControl({ t: 'join', room: target.room, token: target.token, name: target.name })
     }
 
     private onControl(m: ControlMessage): void {

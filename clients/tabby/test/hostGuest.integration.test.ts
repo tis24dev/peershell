@@ -70,7 +70,7 @@ it('PIN handshake, then mirrors snapshot + live output host->guest and input gue
     }
     const guest = new MirrorController(guestTransport, sink, async () => PIN)
     const host = new ShareController(hostTransport, hostTerminal(output$, inputs), PIN, {
-        onSession: ({ room }) => guest.join(room),
+        onSession: ({ room }) => guest.join({ room }),
     })
 
     await guestTransport.connect(relay.url)
@@ -105,7 +105,7 @@ it('a wrong PIN never streams and ends the guest', async () => {
     }
     const guest = new MirrorController(guestTransport, sink, async () => 'wrong-pin')
     const host = new ShareController(hostTransport, hostTerminal(output$, inputs), PIN, {
-        onSession: ({ room }) => guest.join(room),
+        onSession: ({ room }) => guest.join({ room }),
     })
 
     await guestTransport.connect(relay.url)
