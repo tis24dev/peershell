@@ -17,6 +17,7 @@
  * Standalone: node server/src/index.cjs   (env: PORT, BIND, PUBLIC_URL, TOKEN_TTL_MS, PEERSHELL_DATA)
  */
 const http = require('http')
+const https = require('https')
 const crypto = require('crypto')
 const fs = require('fs')
 const path = require('path')
@@ -50,6 +51,68 @@ const genToken = () => crypto.randomBytes(18).toString('base64url')
 const genAuthToken = () => crypto.randomBytes(32).toString('base64url')
 const sha256hex = s => crypto.createHash('sha256').update(s).digest('hex')
 const j = obj => JSON.stringify({ v: 1, ...obj })
+
+// --- email delivery (Brevo transactional API; stdlib https, zero deps) ---
+// We relay through Brevo (not direct VM SMTP) so mail is DKIM/SPF-authoritative for the domain and
+// the VM IP is never in the sending path (no blacklist risk). No key configured -> log the code.
+function brevoSend(opts) {
+    return new Promise((resolve, reject) => {
+        const payload = JSON.stringify({
+            sender: { email: opts.from, name: opts.fromName || 'peershell' },
+            to: [{ email: opts.to }],
+            subject: opts.subject,
+            textContent: opts.text,
+        })
+        const req = https.request({
+            hostname: 'api.brevo.com',
+            path: '/v3/smtp/email',
+            method: 'POST',
+            headers: {
+                'api-key': opts.apiKey,
+                accept: 'application/json',
+                'content-type': 'application/json',
+                'content-length': Buffer.byteLength(payload),
+            },
+        }, res => {
+            let b = ''
+            res.on('data', c => { b += c })
+            res.on('end', () => {
+                if ((res.statusCode || 500) < 300) {
+                    resolve({ status: res.statusCode, body: b })
+                } else {
+                    reject(new Error(`brevo ${res.statusCode}: ${b.slice(0, 200)}`))
+                }
+            })
+        })
+        req.on('error', reject)
+        req.setTimeout(10000, () => req.destroy(new Error('brevo timeout')))
+        req.write(payload)
+        req.end()
+    })
+}
+
+async function deliverVerifyCode(email, code, cfg = {}) {
+    if (cfg.apiKey) {
+        const send = cfg.sendFn || brevoSend
+        try {
+            await send({
+                apiKey: cfg.apiKey,
+                from: cfg.from || 'noreply@peershell.dev',
+                fromName: cfg.fromName || 'peershell',
+                to: email,
+                subject: 'Your peershell verification code',
+                text: `Your peershell verification code is: ${code}\n\nEnter it in the app to finish creating your account.\nIf you did not request this, you can ignore this email.`,
+            })
+            return { delivered: 'email' }
+        } catch (e) {
+            console.warn(`[peershell] verify email to ${email} failed (${e.message}); logging code as fallback`)
+            console.log(`[peershell] verify code for ${email}: ${code}`)
+            return { delivered: 'log-fallback' }
+        }
+    }
+    console.log(`[peershell] verify code for ${email}: ${code}`)
+    return { delivered: 'log' }
+}
 
 function hashPassword(password, salt) {
     const s = salt || crypto.randomBytes(16).toString('hex')
@@ -121,6 +184,11 @@ function startRelay(port = 0, opts = {}) {
         const tokenTtlMs = opts.tokenTtlMs || DEFAULT_TOKEN_TTL_MS
         const authTtlMs = opts.authTtlMs || DEFAULT_AUTH_TTL_MS
         const requireAuth = opts.requireAuth !== false // default ON (production-safe)
+        const emailCfg = opts.email || {
+            apiKey: process.env.BREVO_API_KEY || '',
+            from: process.env.EMAIL_FROM || 'noreply@peershell.dev',
+            fromName: process.env.EMAIL_FROM_NAME || 'peershell',
+        }
         let boundPort = port
         let publicUrl = opts.publicUrl || ''
 
@@ -331,7 +399,7 @@ function startRelay(port = 0, opts = {}) {
                             if (!existing.verified) {
                                 existing.verifyCode = verifyCode
                                 saveStore()
-                                console.log(`[peershell] verify code for ${email}: ${verifyCode}`)
+                                await deliverVerifyCode(email, verifyCode, emailCfg)
                             }
                             // anti-enumeration: same response whether new or existing
                             return sendJson(res, 200, { ok: true, needsVerification: true })
@@ -344,7 +412,7 @@ function startRelay(port = 0, opts = {}) {
                             createdAt: now(), lastLogin: null, revoked: false,
                         })
                         saveStore()
-                        console.log(`[peershell] verify code for ${email}: ${verifyCode}`)
+                        await deliverVerifyCode(email, verifyCode, emailCfg)
                         return sendJson(res, 200, { ok: true, needsVerification: true })
                     }
                     case '/verify-email': {
@@ -684,7 +752,7 @@ function startRelay(port = 0, opts = {}) {
     })
 }
 
-module.exports = { startRelay, hashPassword, verifyPassword, base32Encode, base32Decode, totpAt, verifyTOTP }
+module.exports = { startRelay, hashPassword, verifyPassword, base32Encode, base32Decode, totpAt, verifyTOTP, brevoSend, deliverVerifyCode }
 
 if (require.main === module) {
     const port = Number(process.env.PORT || 8787)
