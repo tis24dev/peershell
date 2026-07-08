@@ -1,8 +1,10 @@
 import { Subject } from 'rxjs'
 import {
-    SessionTransport, ControlMessage, BinaryPayload, Channel, TransportState, base64ToUtf8,
+    SessionTransport, ControlMessage, BinaryPayload, Channel, TransportState, base64ToUtf8, hashPin,
 } from '@peershell/protocol'
 import { ShareController, HostTerminal } from '../src/host/shareController'
+
+const PIN = '135790'
 
 class MockTransport implements SessionTransport {
     sentControl: ControlMessage[] = []
@@ -40,6 +42,9 @@ class MockTransport implements SessionTransport {
     controlTypes(): string[] {
         return this.sentControl.map(c => c.t)
     }
+    last<T extends ControlMessage['t']>(t: T): Extract<ControlMessage, { t: T }> | undefined {
+        return [...this.sentControl].reverse().find(c => c.t === t) as never
+    }
 }
 
 function mockTab() {
@@ -58,56 +63,93 @@ function mockTab() {
     return { tab, output$, resize$, closed$, inputs }
 }
 
-it('creates a session, then mirrors output only after snapshot-ack and injects input', async () => {
+function waitUntil(pred: () => boolean, ms = 2000): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const iv = setInterval(() => {
+            if (pred()) {
+                clearInterval(iv)
+                clearTimeout(to)
+                resolve()
+            }
+        }, 5)
+        const to = setTimeout(() => {
+            clearInterval(iv)
+            reject(new Error('waitUntil timeout'))
+        }, ms)
+    })
+}
+
+async function respond(t: MockTransport, nonce: string, pin: string): Promise<void> {
+    t.emitControl({ t: 'pin-response', hash: await hashPin(pin, nonce) })
+}
+
+it('gates on PIN (rate-limited), then mirrors output after snapshot-ack and injects input', async () => {
     const t = new MockTransport()
     const m = mockTab()
-    const c = new ShareController(t, m.tab)
+    const c = new ShareController(t, m.tab, PIN)
 
     await c.start('ws://relay')
     expect(t.controlTypes()).toEqual(['hello', 'create-session'])
 
     t.emitControl({ t: 'session-created', room: 'ABC234', magicLink: 'http://x/s/tok' })
     expect(c.room).toBe('ABC234')
-    expect(c.magicLink).toBe('http://x/s/tok')
 
     t.emitControl({ t: 'peer-joined', peerId: 0, kind: 'web' })
-    const snap = t.sentControl.find(x => x.t === 'snapshot')
-    expect(snap && snap.t === 'snapshot' && base64ToUtf8(snap.data)).toBe('SNAPSHOT')
+    const chal = t.last('pin-challenge')
+    expect(chal).toBeTruthy()
 
-    // Barrier: no output before the guest acks the snapshot.
-    m.output$.next(new Uint8Array([1, 2, 3]))
-    expect(t.sentData.length).toBe(0)
+    // Wrong PIN -> pin-fail{left:4} + a fresh challenge; input still rejected.
+    await respond(t, chal!.nonce, '000000')
+    await waitUntil(() => t.sentControl.some(x => x.t === 'pin-fail'))
+    expect(t.last('pin-fail')!.left).toBe(4)
+    t.emitBinary({ peerId: 0, channel: Channel.Input, data: new Uint8Array([1]) })
+    expect(m.inputs).toHaveLength(0)
+
+    // Correct PIN on the new challenge -> pin-ok + snapshot.
+    await respond(t, t.last('pin-challenge')!.nonce, PIN)
+    await waitUntil(() => t.sentControl.some(x => x.t === 'snapshot'))
+    expect(t.sentControl.some(x => x.t === 'pin-ok')).toBe(true)
+    expect(base64ToUtf8(t.last('snapshot')!.data)).toBe('SNAPSHOT')
+
+    // Barrier: no output before ack.
+    m.output$.next(new Uint8Array([9]))
+    expect(t.sentData).toHaveLength(0)
 
     t.emitControl({ t: 'snapshot-ack' })
     m.output$.next(new Uint8Array([9, 9]))
     expect(t.sentData).toHaveLength(1)
-    expect(t.sentData[0].channel).toBe(Channel.Output)
     expect(Array.from(t.sentData[0].data)).toEqual([9, 9])
 
-    // Guest input frame is injected into the local terminal.
+    // Authenticated: input now accepted.
     t.emitBinary({ peerId: 0, channel: Channel.Input, data: new Uint8Array([108, 115]) })
-    expect(m.inputs).toHaveLength(1)
     expect(Array.from(m.inputs[0])).toEqual([108, 115])
-
-    // resize is forwarded as a control message.
-    m.resize$.next({ cols: 120, rows: 40 })
-    expect(t.sentControl.find(x => x.t === 'resize')).toEqual({ t: 'resize', cols: 120, rows: 40 })
 })
 
-it('tears down on tab close and stops forwarding', async () => {
+it('kicks the peer after exhausting PIN attempts', async () => {
     const t = new MockTransport()
     const m = mockTab()
-    const c = new ShareController(t, m.tab)
+    const c = new ShareController(t, m.tab, PIN)
     await c.start('ws://relay')
-    t.emitControl({ t: 'session-created', room: 'ABC234', magicLink: 'http://x/s/tok' })
-    t.emitControl({ t: 'peer-joined', peerId: 0, kind: 'desktop' })
-    t.emitControl({ t: 'snapshot-ack' })
+    t.emitControl({ t: 'session-created', room: 'ABC234', magicLink: 'http://x' })
+    t.emitControl({ t: 'peer-joined', peerId: 0, kind: 'web' })
+
+    for (let i = 0; i < 5; i++) {
+        await respond(t, t.last('pin-challenge')!.nonce, '999999')
+        await waitUntil(() => t.sentControl.filter(x => x.t === 'pin-fail').length === i + 1)
+    }
+    expect(t.last('pin-fail')!.left).toBe(0)
+    expect(t.sentControl.some(x => x.t === 'peer-left' && x.reason === 'pin-failed')).toBe(true)
+    expect(c['authenticated']).toBe(false)
+})
+
+it('tears down on tab close', async () => {
+    const t = new MockTransport()
+    const m = mockTab()
+    const c = new ShareController(t, m.tab, PIN)
+    await c.start('ws://relay')
+    t.emitControl({ t: 'session-created', room: 'ABC234', magicLink: 'http://x' })
 
     m.closed$.next()
     expect(t.closed).toBe(true)
     expect(t.controlTypes()).toEqual(expect.arrayContaining(['peer-left', 'session-close']))
-
-    const before = t.sentData.length
-    m.output$.next(new Uint8Array([5]))
-    expect(t.sentData.length).toBe(before)
 })

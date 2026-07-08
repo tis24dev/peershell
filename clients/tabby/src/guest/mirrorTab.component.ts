@@ -3,6 +3,7 @@ import { BaseTerminalTabComponent } from 'tabby-terminal'
 import { SessionTransport } from '@peershell/protocol'
 
 import { MirrorSession } from './mirrorSession'
+import { PinProvider } from './mirrorController'
 
 /**
  * Guest tab that renders a mirrored remote terminal. Reuses BaseTerminalTabComponent's template so
@@ -19,6 +20,7 @@ import { MirrorSession } from './mirrorSession'
 export class MirrorTabComponent extends BaseTerminalTabComponent<any> {
     @Input() transport!: SessionTransport
     @Input() room!: string
+    @Input() pinProvider!: PinProvider
     session: MirrorSession | null = null
 
     // eslint-disable-next-line @typescript-eslint/no-useless-constructor
@@ -39,7 +41,7 @@ export class MirrorTabComponent extends BaseTerminalTabComponent<any> {
     }
 
     protected onFrontendReady(): void {
-        const session = new MirrorSession(this.injector, this.transport, this.room)
+        const session = new MirrorSession(this.injector, this.transport, this.room, this.pinProvider)
         this.setSession(session)
         // Adopt the host's size (tmate model). Guest window resizes are ignored (no frontend.resize$
         // subscription) so there is no resize feedback loop.

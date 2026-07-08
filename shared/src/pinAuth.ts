@@ -22,6 +22,14 @@ export function generateNonce(byteLength = 16): string {
     return toHex(arr)
 }
 
+/** A random numeric PIN (default 6 digits) for a share. Kept local; never sent in cleartext. */
+export function generatePin(digits = 6): string {
+    const arr = new Uint32Array(1)
+    globalThis.crypto.getRandomValues(arr)
+    const n = arr[0] % (10 ** digits)
+    return n.toString().padStart(digits, '0')
+}
+
 /** `H(pin, nonce)` as a hex string (SHA-256 over `nonce:pin`). */
 export async function hashPin(pin: string, nonce: string): Promise<string> {
     const data = new TextEncoder().encode(`${nonce}:${pin}`)

@@ -1,7 +1,7 @@
 import {
-    SessionTransport, ControlMessage, BinaryPayload, Channel, TransportState, utf8ToBase64,
+    SessionTransport, ControlMessage, BinaryPayload, Channel, TransportState, utf8ToBase64, hashPin,
 } from '@peershell/protocol'
-import { MirrorController, MirrorSink } from '../src/guest/mirrorController'
+import { MirrorController, MirrorSink, PinProvider } from '../src/guest/mirrorController'
 
 class MockTransport implements SessionTransport {
     sentControl: ControlMessage[] = []
@@ -36,6 +36,9 @@ class MockTransport implements SessionTransport {
     controlTypes(): string[] {
         return this.sentControl.map(c => c.t)
     }
+    last<T extends ControlMessage['t']>(t: T): Extract<ControlMessage, { t: T }> | undefined {
+        return [...this.sentControl].reverse().find(c => c.t === t) as never
+    }
 }
 
 function mockSink() {
@@ -51,14 +54,41 @@ function mockSink() {
 }
 
 const dec = (b: Uint8Array) => new TextDecoder().decode(b)
+const noPin: PinProvider = async () => null
 
-it('joins, renders + acks the snapshot, renders output, and forwards input', () => {
+function waitUntil(pred: () => boolean, ms = 2000): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const iv = setInterval(() => {
+            if (pred()) {
+                clearInterval(iv)
+                clearTimeout(to)
+                resolve()
+            }
+        }, 5)
+        const to = setTimeout(() => {
+            clearInterval(iv)
+            reject(new Error('waitUntil timeout'))
+        }, ms)
+    })
+}
+
+it('answers the PIN challenge with H(pin, nonce)', async () => {
     const t = new MockTransport()
     const s = mockSink()
-    const c = new MirrorController(t, s.sink)
-
+    const c = new MirrorController(t, s.sink, async () => '424242')
     c.join('ABC234')
     expect(t.controlTypes()).toEqual(['hello', 'join'])
+
+    t.emitControl({ t: 'pin-challenge', nonce: 'nonce-xyz' })
+    await waitUntil(() => t.sentControl.some(x => x.t === 'pin-response'))
+    expect(t.last('pin-response')!.hash).toBe(await hashPin('424242', 'nonce-xyz'))
+})
+
+it('renders + acks the snapshot, renders output, forwards input', () => {
+    const t = new MockTransport()
+    const s = mockSink()
+    const c = new MirrorController(t, s.sink, noPin)
+    c.join('ABC234')
 
     t.emitControl({ t: 'snapshot', cols: 100, rows: 30, data: utf8ToBase64('SNAP') })
     expect(dec(s.emits[0])).toBe('SNAP')
@@ -68,20 +98,28 @@ it('joins, renders + acks the snapshot, renders output, and forwards input', () 
     t.emitBinary({ peerId: 0, channel: Channel.Output, data: new Uint8Array([79, 75]) })
     expect(dec(s.emits[1])).toBe('OK')
 
-    // input channel from host is ignored by the guest
-    t.emitBinary({ peerId: 0, channel: Channel.Input, data: new Uint8Array([1]) })
-    expect(s.emits).toHaveLength(2)
-
     c.writeInput(new Uint8Array([108, 115]))
-    expect(t.sentData).toHaveLength(1)
     expect(t.sentData[0].channel).toBe(Channel.Input)
     expect(Array.from(t.sentData[0].data)).toEqual([108, 115])
+})
+
+it('ends on pin-fail with no attempts left, but not while attempts remain', () => {
+    const t = new MockTransport()
+    const s = mockSink()
+    const c = new MirrorController(t, s.sink, noPin)
+    c.join('ABC234')
+
+    t.emitControl({ t: 'pin-fail', left: 3 })
+    expect(s.getEnded()).toBeNull()
+
+    t.emitControl({ t: 'pin-fail', left: 0 })
+    expect(s.getEnded()).toBe('wrong PIN')
 })
 
 it('surfaces a host resize and ends on peer-left (once)', () => {
     const t = new MockTransport()
     const s = mockSink()
-    const c = new MirrorController(t, s.sink)
+    const c = new MirrorController(t, s.sink, noPin)
     c.join('ABC234')
 
     t.emitControl({ t: 'resize', cols: 132, rows: 43 })

@@ -3,10 +3,11 @@ import { map } from 'rxjs'
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap'
 import { AppService, ConfigService, NotificationsService, BaseTabComponent, PromptModalComponent } from 'tabby-core'
 import { BaseTerminalTabComponent, ResizeEvent } from 'tabby-terminal'
-import { WebSocketTransport, normalizeRoomCode, isValidRoomCode } from '@peershell/protocol'
+import { WebSocketTransport, normalizeRoomCode, isValidRoomCode, generatePin } from '@peershell/protocol'
 
 import { ShareController, HostTerminal } from '../host/shareController'
 import { MirrorTabComponent } from '../guest/mirrorTab.component'
+import { PinProvider } from '../guest/mirrorController'
 
 /** Owns the active host shares and adapts a Tabby terminal tab to the transport-driven controller. */
 @Injectable({ providedIn: 'root' })
@@ -43,9 +44,14 @@ export class PeershellService {
             return
         }
 
+        // Per-session PIN, generated locally and shown to the host. Never sent to the server in
+        // cleartext (challenge-response only). The host shares it with the intended guest out-of-band.
+        const pin = generatePin(6)
         const transport = new WebSocketTransport()
-        const controller = new ShareController(transport, this.adapt(tab), {
-            onSession: h => this.notifications.info('peershell: sharing this terminal', h.magicLink),
+        const controller = new ShareController(transport, this.adapt(tab), pin, {
+            onSession: h => this.notifications.info(`peershell: sharing — PIN ${pin}`, h.magicLink),
+            onAuthenticated: () => this.notifications.notice('peershell: guest connected'),
+            onPinFailed: () => this.notifications.error('peershell: guest failed the PIN'),
             onPeerLeft: () => this.notifications.notice('peershell: peer disconnected'),
             onError: (code, message) => this.notifications.error(`peershell: ${code}`, message),
         })
@@ -78,11 +84,13 @@ export class PeershellService {
             this.notifications.error('peershell: could not connect to the server', String(err))
             return
         }
+        const pinProvider: PinProvider = () => this.promptPin()
         this.app.openNewTab({
             type: MirrorTabComponent,
             inputs: {
                 transport,
                 room,
+                pinProvider,
                 profile: { name: `peershell: ${room}`, type: 'peershell-mirror', options: {} },
             },
         })
@@ -102,6 +110,15 @@ export class PeershellService {
             return null
         }
         return room
+    }
+
+    private async promptPin(): Promise<string | null> {
+        const modal = this.ngbModal.open(PromptModalComponent)
+        modal.componentInstance.prompt = 'Session PIN'
+        modal.componentInstance.password = true
+        const result = await modal.result.catch(() => null)
+        const value: string | undefined = result?.value
+        return value ? value.trim() : null
     }
 
     stopSharing(tab: BaseTerminalTabComponent): void {

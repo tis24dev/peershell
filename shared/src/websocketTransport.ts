@@ -21,6 +21,8 @@ export interface WebSocketLike {
 
 export type WebSocketCtor = new (url: string) => WebSocketLike
 
+const KEEPALIVE_INTERVAL_MS = 20000
+
 function toUint8(data: unknown): Uint8Array {
     if (data instanceof ArrayBuffer) {
         return new Uint8Array(data)
@@ -35,6 +37,7 @@ function toUint8(data: unknown): Uint8Array {
 export class WebSocketTransport implements SessionTransport {
     private ws: WebSocketLike | null = null
     private state: TransportState = 'closed'
+    private keepalive: ReturnType<typeof setInterval> | null = null
     private readonly WS: WebSocketCtor
     private readonly controlCbs: Array<(m: ControlMessage) => void> = []
     private readonly binaryCbs: Array<(f: BinaryPayload) => void> = []
@@ -66,6 +69,7 @@ export class WebSocketTransport implements SessionTransport {
             this.ws = ws
             ws.onopen = () => {
                 this.setState('open')
+                this.startKeepalive()
                 resolve()
             }
             ws.onerror = () => {
@@ -85,6 +89,14 @@ export class WebSocketTransport implements SessionTransport {
                 msg = decodeControl(data)
             } catch {
                 return // ignore malformed control frames
+            }
+            // Keepalive is handled at the transport layer and not surfaced to the app.
+            if (msg.t === 'ping') {
+                this.sendControl({ t: 'pong' })
+                return
+            }
+            if (msg.t === 'pong') {
+                return
             }
             for (const cb of this.controlCbs) {
                 cb(msg)
@@ -111,7 +123,25 @@ export class WebSocketTransport implements SessionTransport {
     }
 
     close(code?: number, reason?: string): void {
+        this.stopKeepalive()
         this.ws?.close(code, reason)
+    }
+
+    private startKeepalive(): void {
+        this.stopKeepalive()
+        this.keepalive = setInterval(() => this.sendControl({ t: 'ping' }), KEEPALIVE_INTERVAL_MS)
+        // Don't keep a Node process (or test runner) alive just for keepalive.
+        const timer = this.keepalive as unknown as { unref?: () => void }
+        if (typeof timer.unref === 'function') {
+            timer.unref()
+        }
+    }
+
+    private stopKeepalive(): void {
+        if (this.keepalive !== null) {
+            clearInterval(this.keepalive)
+            this.keepalive = null
+        }
     }
 
     onControl(cb: (m: ControlMessage) => void): void {
@@ -128,6 +158,9 @@ export class WebSocketTransport implements SessionTransport {
 
     private setState(s: TransportState): void {
         this.state = s
+        if (s === 'closed') {
+            this.stopKeepalive()
+        }
         for (const cb of this.stateCbs) {
             cb(s)
         }

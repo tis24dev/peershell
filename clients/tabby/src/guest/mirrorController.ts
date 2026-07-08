@@ -1,13 +1,13 @@
 /**
  * Guest side of a shared session. Tabby-agnostic (drives a SessionTransport + a small MirrorSink
- * port), so it is fully unit-testable and reusable by the web-client / mobile later. MirrorSession
- * adapts it to a Tabby BaseSession.
+ * port + a PIN provider), so it is fully unit-testable and reusable by the web-client / mobile later.
+ * MirrorSession adapts it to a Tabby BaseSession.
  *
- * Stage 2 scope: join, render the snapshot then ack it (barrier), render live output, forward the
- * guest's keystrokes as input, and surface host resizes + session end. The PIN gate lands in Stage 3.
+ * Flow: join -> answer the host's PIN challenge -> on pin-ok, render the snapshot then ack it
+ * (barrier) -> render live output, forward the guest's keystrokes.
  */
 import {
-    SessionTransport, ControlMessage, Channel, ClientKind, SINGLE_PEER, base64ToBytes,
+    SessionTransport, ControlMessage, Channel, ClientKind, SINGLE_PEER, base64ToBytes, hashPin,
 } from '@peershell/protocol'
 
 /** Port the controller drives on the guest terminal (adapted from a Tabby session). */
@@ -17,6 +17,9 @@ export interface MirrorSink {
     ended(reason: string): void
 }
 
+/** Asks the user for the session PIN. Returns null if cancelled. */
+export type PinProvider = () => Promise<string | null>
+
 export class MirrorController {
     private readonly peerId = SINGLE_PEER
     private endedFlag = false
@@ -24,6 +27,7 @@ export class MirrorController {
     constructor(
         private readonly transport: SessionTransport,
         private readonly sink: MirrorSink,
+        private readonly pinProvider: PinProvider,
     ) {
         this.transport.onControl(m => this.onControl(m))
         this.transport.onBinary(f => {
@@ -43,6 +47,15 @@ export class MirrorController {
 
     private onControl(m: ControlMessage): void {
         switch (m.t) {
+            case 'pin-challenge':
+                void this.answerPin(m.nonce)
+                break
+            case 'pin-fail':
+                if (m.left <= 0) {
+                    this.end('wrong PIN')
+                }
+                // left > 0: the host re-challenges, which re-prompts.
+                break
             case 'snapshot':
                 this.sink.emit(base64ToBytes(m.data))
                 this.sink.hostResize(m.cols, m.rows)
@@ -60,6 +73,16 @@ export class MirrorController {
             default:
                 break
         }
+    }
+
+    private async answerPin(nonce: string): Promise<void> {
+        const pin = await this.pinProvider()
+        if (!pin) {
+            this.close()
+            return
+        }
+        const hash = await hashPin(pin, nonce)
+        this.transport.sendControl({ t: 'pin-response', hash })
     }
 
     /** Forward the guest's keystrokes to the host. */
