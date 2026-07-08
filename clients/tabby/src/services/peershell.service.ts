@@ -181,17 +181,25 @@ export class PeershellService {
 
     /** Toolbar entry: pops a native dropdown menu with the peershell actions. */
     openMenu(): void {
+        const loggedIn = this.account.isLoggedIn()
         this.platform.popupContextMenu([
             { label: 'Share this terminal', click: () => { void this.shareActive() } },
             { label: 'Join a shared terminal', click: () => { void this.joinShared() } },
             { type: 'separator' },
-            { label: this.account.isLoggedIn() ? 'Account / log out' : 'Log in', click: () => { this.openAccount() } },
+            loggedIn
+                ? { label: `Log out (${this.account.email})`, click: () => { void this.logout() } }
+                : { label: 'Log in', click: () => { this.openAccount() } },
         ])
     }
 
-    /** Opens the account modal (login / register / 2FA / logout). */
+    /** Opens the account modal (login / register / 2FA / password reset). */
     openAccount(): void {
         this.ngbModal.open(LoginModalComponent)
+    }
+
+    async logout(): Promise<void> {
+        await this.account.logout()
+        this.notifications.notice('peershell: logged out')
     }
 
     /** Opens the login modal, resolving with the bearer token on success or null if cancelled. */

@@ -13,12 +13,18 @@ const server = require('../../server/src/index.cjs') as {
 
 let relay: { url: string, publicUrl: string, close: () => Promise<void> }
 let httpBase = ''
-const logged: string[] = []
+const sent: any[] = []
 let logSpy: jest.SpyInstance
 
 beforeAll(async () => {
-    logSpy = jest.spyOn(console, 'log').mockImplementation((...a: any[]) => { logged.push(a.join(' ')) })
-    relay = await server.startRelay(0, { requireAuth: true, ephemeral: true })
+    logSpy = jest.spyOn(console, 'log').mockImplementation(() => { /* silence */ })
+    relay = await server.startRelay(0, {
+        requireAuth: true,
+        ephemeral: true,
+        // Inject a mailer stub so registration takes the email-verification path (not auto-verify) and
+        // the code is captured here for the test.
+        email: { apiKey: 'test', from: 'noreply@test', sendFn: async (o: any) => { sent.push(o) } },
+    })
     httpBase = relay.url.replace('ws://', 'http://')
 })
 afterAll(async () => { await relay.close(); logSpy.mockRestore() })
@@ -47,8 +53,9 @@ function api(method: string, path: string, body?: any, token?: string): Promise<
 }
 
 const codeFor = (email: string): string => {
-    const line = [...logged].reverse().find(l => l.includes(`verify code for ${email}:`))
-    return line ? line.split(':').pop()!.trim() : ''
+    const mail = [...sent].reverse().find(m => m.to === email)
+    const m = mail && /(\d{6})/.exec(mail.text)
+    return m ? m[1] : ''
 }
 
 // Drive the WS create-session leg; resolves with the first control message the server sends back.
@@ -154,6 +161,28 @@ it('optional TOTP: setup -> enable -> login needs 2FA -> verify issues token', a
     expect(verify.status).toBe(200)
     expect(typeof verify.json.token).toBe('string')
 }, 25000)
+
+it('auto-verifies and returns a token when no email is configured', async () => {
+    const r2 = await server.startRelay(0, { requireAuth: true, ephemeral: true }) // no email cfg -> log path
+    const base2 = r2.url.replace('ws://', 'http://')
+    const post = (path: string, body: any): Promise<{ status: number, json: any }> => new Promise((resolve, reject) => {
+        const data = Buffer.from(JSON.stringify(body))
+        const u = new URL(base2 + path)
+        const req = http.request({ hostname: u.hostname, port: u.port, path: u.pathname, method: 'POST', headers: { 'content-type': 'application/json', 'content-length': data.length } }, res => {
+            let b = ''
+            res.on('data', c => { b += c })
+            res.on('end', () => resolve({ status: res.statusCode ?? 0, json: JSON.parse(b || '{}') }))
+        })
+        req.on('error', reject)
+        req.write(data)
+        req.end()
+    })
+    const r = await post('/register', { email: 'noemail@example.com', password: 'CorrectHorse9' })
+    expect(r.status).toBe(200)
+    expect(typeof r.json.token).toBe('string')
+    expect(r.json.autoVerified).toBe(true)
+    await r2.close()
+}, 15000)
 
 it('logout revokes the token (dashboard then unauthorized)', async () => {
     const token = await registerVerifyLogin('frank@example.com')

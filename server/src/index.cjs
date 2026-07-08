@@ -91,7 +91,13 @@ function brevoSend(opts) {
     })
 }
 
-async function deliverVerifyCode(email, code, cfg = {}) {
+async function deliverVerifyCode(email, code, cfg = {}, kind = 'verification') {
+    const isReset = kind === 'reset'
+    const subject = isReset ? 'Your peershell password reset code' : 'Your peershell verification code'
+    const text = isReset
+        ? `Your peershell password reset code is: ${code}\n\nEnter it in the app to set a new password.\nIf you did not request this, you can ignore this email.`
+        : `Your peershell verification code is: ${code}\n\nEnter it in the app to finish creating your account.\nIf you did not request this, you can ignore this email.`
+    const label = isReset ? 'reset code' : 'verify code'
     if (cfg.apiKey) {
         const send = cfg.sendFn || brevoSend
         try {
@@ -100,17 +106,17 @@ async function deliverVerifyCode(email, code, cfg = {}) {
                 from: cfg.from || 'noreply@peershell.dev',
                 fromName: cfg.fromName || 'peershell',
                 to: email,
-                subject: 'Your peershell verification code',
-                text: `Your peershell verification code is: ${code}\n\nEnter it in the app to finish creating your account.\nIf you did not request this, you can ignore this email.`,
+                subject,
+                text,
             })
             return { delivered: 'email' }
         } catch (e) {
-            console.warn(`[peershell] verify email to ${email} failed (${e.message}); logging code as fallback`)
-            console.log(`[peershell] verify code for ${email}: ${code}`)
+            console.warn(`[peershell] ${label} email to ${email} failed (${e.message}); logging as fallback`)
+            console.log(`[peershell] ${label} for ${email}: ${code}`)
             return { delivered: 'log-fallback' }
         }
     }
-    console.log(`[peershell] verify code for ${email}: ${code}`)
+    console.log(`[peershell] ${label} for ${email}: ${code}`)
     return { delivered: 'log' }
 }
 
@@ -394,26 +400,36 @@ function startRelay(port = 0, opts = {}) {
                             return sendJson(res, 429, { error: 'rate-limited', retryAfter: REG_WINDOW_MS / 1000 })
                         }
                         const existing = findAccount(email)
-                        const verifyCode = crypto.randomInt(0, 1000000).toString().padStart(6, '0')
                         if (existing) {
-                            if (!existing.verified) {
-                                existing.verifyCode = verifyCode
-                                saveStore()
-                                await deliverVerifyCode(email, verifyCode, emailCfg)
+                            if (existing.verified) {
+                                return sendJson(res, 200, { ok: true, alreadyRegistered: true })
                             }
-                            // anti-enumeration: same response whether new or existing
+                            existing.verifyCode = crypto.randomInt(0, 1000000).toString().padStart(6, '0')
+                            saveStore()
+                            await deliverVerifyCode(email, existing.verifyCode, emailCfg)
                             return sendJson(res, 200, { ok: true, needsVerification: true })
                         }
+                        const verifyCode = crypto.randomInt(0, 1000000).toString().padStart(6, '0')
                         const { salt, hash } = hashPassword(password)
-                        store.accounts.push({
+                        const acct = {
                             id: crypto.randomUUID(), email, salt, hash,
                             verified: false, verifyCode,
                             totpSecret: null, totpEnabled: false, pendingTotpSecret: null,
                             createdAt: now(), lastLogin: null, revoked: false,
-                        })
-                        saveStore()
-                        await deliverVerifyCode(email, verifyCode, emailCfg)
-                        return sendJson(res, 200, { ok: true, needsVerification: true })
+                        }
+                        store.accounts.push(acct)
+                        const d = await deliverVerifyCode(email, verifyCode, emailCfg)
+                        if (d.delivered === 'email') {
+                            saveStore()
+                            return sendJson(res, 200, { ok: true, needsVerification: true })
+                        }
+                        // Email not deliverable (no SMTP / send failed): don't strand the user behind a
+                        // code they can't receive — auto-verify and log them in immediately.
+                        acct.verified = true
+                        acct.verifyCode = null
+                        acct.lastLogin = now()
+                        const t = issueAuthToken(acct.id)
+                        return sendJson(res, 200, { token: t.token, expiresAt: t.expiresAt, autoVerified: true })
                     }
                     case '/verify-email': {
                         const email = String(body.email || '').toLowerCase().trim()
@@ -546,13 +562,47 @@ function startRelay(port = 0, opts = {}) {
                         const t = issueAuthToken(acct.id)
                         return sendJson(res, 200, { token: t.token, expiresAt: t.expiresAt })
                     }
+                    case '/request-password-reset': {
+                        const email = String(body.email || '').toLowerCase().trim()
+                        const acct = findAccount(email)
+                        if (acct && acct.verified) {
+                            acct.resetCode = crypto.randomInt(0, 1000000).toString().padStart(6, '0')
+                            acct.resetExpiresAt = now() + 15 * 60 * 1000
+                            saveStore()
+                            await deliverVerifyCode(email, acct.resetCode, emailCfg, 'reset')
+                        }
+                        // anti-enumeration: always the same response
+                        return sendJson(res, 200, { ok: true })
+                    }
+                    case '/reset-password': {
+                        const email = String(body.email || '').toLowerCase().trim()
+                        const code = String(body.code || '')
+                        const newPassword = String(body.newPassword || '')
+                        if (newPassword.length < MIN_PASSWORD) {
+                            return sendJson(res, 400, { error: 'password-too-weak', min: MIN_PASSWORD })
+                        }
+                        const acct = findAccount(email)
+                        if (acct && acct.resetCode && acct.resetExpiresAt > now() &&
+                            code.length === acct.resetCode.length &&
+                            crypto.timingSafeEqual(Buffer.from(code), Buffer.from(acct.resetCode))) {
+                            const { salt, hash } = hashPassword(newPassword)
+                            acct.salt = salt
+                            acct.hash = hash
+                            acct.resetCode = null
+                            acct.resetExpiresAt = null
+                            acct.verified = true
+                            saveStore()
+                            return sendJson(res, 200, { ok: true })
+                        }
+                        return sendJson(res, 400, { error: 'invalid' })
+                    }
                     default:
                         return sendJson(res, 404, { error: 'not-found' })
                 }
             })
         }
 
-        const REST_POST = new Set(['/register', '/verify-email', '/login', '/2fa/verify', '/2fa/setup', '/2fa/enable', '/2fa/disable', '/logout', '/session/refresh'])
+        const REST_POST = new Set(['/register', '/verify-email', '/login', '/2fa/verify', '/2fa/setup', '/2fa/enable', '/2fa/disable', '/logout', '/session/refresh', '/request-password-reset', '/reset-password'])
 
         const server = http.createServer((req, res) => {
             const url = (req.url || '').split('?')[0]

@@ -87,6 +87,14 @@ export class AccountService {
         return this.api('POST', '/2fa/verify', { sessionKey, code })
     }
 
+    requestPasswordReset(email: string): Promise<AccountApiResult> {
+        return this.api('POST', '/request-password-reset', { email })
+    }
+
+    resetPassword(email: string, code: string, newPassword: string): Promise<AccountApiResult> {
+        return this.api('POST', '/reset-password', { email, code, newPassword })
+    }
+
     /** Dashboard: the account's live shares. Clears the local token on 401 (expired). */
     async getSessions(): Promise<{ account?: { email: string, totpEnabled: boolean }, sessions: any[], error?: string }> {
         const r = await this.api('GET', '/sessions', undefined, true)
