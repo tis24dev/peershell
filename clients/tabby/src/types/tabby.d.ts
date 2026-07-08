@@ -102,6 +102,18 @@ declare module 'tabby-core' {
     }
 }
 
+declare module 'tabby-settings' {
+    const _default: any
+    export default _default
+
+    export abstract class SettingsTabProvider {
+        id: string
+        icon: string
+        title: string
+        abstract getComponentType(): unknown
+    }
+}
+
 declare module 'tabby-terminal' {
     import { Observable } from 'rxjs'
     import { BaseTabComponent } from 'tabby-core'

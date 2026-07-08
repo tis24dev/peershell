@@ -87,6 +87,19 @@ export class AccountService {
         return this.api('POST', '/2fa/verify', { sessionKey, code })
     }
 
+    /** Dashboard: the account's live shares. Clears the local token on 401 (expired). */
+    async getSessions(): Promise<{ account?: { email: string, totpEnabled: boolean }, sessions: any[], error?: string }> {
+        const r = await this.api('GET', '/sessions', undefined, true)
+        if (r.status === 200) {
+            return { account: (r as any).account, sessions: (r as any).sessions ?? [] }
+        }
+        if (r.status === 401) {
+            await this.clearLocal()
+            return { sessions: [], error: 'unauthorized' }
+        }
+        return { sessions: [], error: String(r.error ?? r.status) }
+    }
+
     /** Store the bearer token locally (config store). */
     async persist(email: string, token: string, expiresAt?: number): Promise<void> {
         this.config.store.peershell = this.config.store.peershell || {}

@@ -6,6 +6,7 @@ import { NgbModule } from '@ng-bootstrap/ng-bootstrap'
 import { ToastrModule } from 'ngx-toastr'
 import TabbyCorePlugin, { ConfigProvider, ToolbarButtonProvider, TabContextMenuItemProvider } from 'tabby-core'
 import TabbyTerminalModule from 'tabby-terminal'
+import { SettingsTabProvider } from 'tabby-settings'
 
 import { PROTOCOL_VERSION } from '@peershell/protocol'
 import { PeershellConfigProvider } from './config'
@@ -14,6 +15,8 @@ import { PeershellToolbarButtonProvider } from './providers/toolbarButtonProvide
 import { PeershellContextMenu } from './providers/tabContextMenu'
 import { MirrorTabComponent } from './guest/mirrorTab.component'
 import { LoginModalComponent } from './account/login-modal.component'
+import { PeershellSettingsTabProvider } from './settings/settings-tab.provider'
+import { PeershellSettingsTabComponent } from './settings/settings-tab.component'
 
 @NgModule({
     imports: [
@@ -28,10 +31,12 @@ import { LoginModalComponent } from './account/login-modal.component'
         { provide: ConfigProvider, useClass: PeershellConfigProvider, multi: true },
         { provide: ToolbarButtonProvider, useClass: PeershellToolbarButtonProvider, multi: true },
         { provide: TabContextMenuItemProvider, useClass: PeershellContextMenu, multi: true },
+        { provide: SettingsTabProvider, useClass: PeershellSettingsTabProvider, multi: true },
     ],
     declarations: [
         MirrorTabComponent,
         LoginModalComponent,
+        PeershellSettingsTabComponent,
     ],
 })
 export default class PeershellModule {
