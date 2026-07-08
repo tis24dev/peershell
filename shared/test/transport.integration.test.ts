@@ -11,7 +11,7 @@ import { hashPin, verifyPin, generateNonce } from '../src/pinAuth'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { startRelay } = require('../../server/src/index.cjs') as {
-    startRelay: (port?: number) => Promise<{ port: number, url: string, close: () => Promise<void> }>
+    startRelay: (port?: number, opts?: any) => Promise<{ port: number, url: string, close: () => Promise<void> }>
 }
 
 const WS = WebSocket as unknown as WebSocketCtor
@@ -21,7 +21,7 @@ const dec = (b: Uint8Array) => new TextDecoder().decode(b)
 let relay: { url: string, close: () => Promise<void> }
 
 beforeAll(async () => {
-    relay = await startRelay(0)
+    relay = await startRelay(0, { requireAuth: false })
 })
 
 afterAll(async () => {

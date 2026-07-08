@@ -9,7 +9,7 @@ import { WebSocketTransport, WebSocketCtor, HttpTunnelHandler } from '../src'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { startRelay } = require('../../server/src/index.cjs') as {
-    startRelay: (port?: number) => Promise<{ url: string, close: () => Promise<void> }>
+    startRelay: (port?: number, opts?: any) => Promise<{ url: string, close: () => Promise<void> }>
 }
 
 const WS = WebSocket as unknown as WebSocketCtor
@@ -43,7 +43,7 @@ function httpGet(url: string): Promise<{ status: number, body: string }> {
 }
 
 let relay: { url: string, close: () => Promise<void> }
-beforeAll(async () => { relay = await startRelay(0) })
+beforeAll(async () => { relay = await startRelay(0, { requireAuth: false }) })
 afterAll(async () => { await relay.close() })
 
 it('serves the host-embedded web-client page over the tunnel', async () => {

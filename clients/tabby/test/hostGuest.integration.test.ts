@@ -10,7 +10,7 @@ import { ShareController, HostTerminal } from '../src/host/shareController'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { startRelay } = require('../../../server/src/index.cjs') as {
-    startRelay: (port?: number) => Promise<{ url: string, close: () => Promise<void> }>
+    startRelay: (port?: number, opts?: any) => Promise<{ url: string, close: () => Promise<void> }>
 }
 
 const WS = WebSocket as unknown as WebSocketCtor
@@ -35,7 +35,7 @@ function waitFor(pred: () => boolean, timeoutMs = 12000): Promise<void> {
 }
 
 let relay: { url: string, close: () => Promise<void> }
-beforeAll(async () => { relay = await startRelay(0) })
+beforeAll(async () => { relay = await startRelay(0, { requireAuth: false }) })
 afterAll(async () => { await relay.close() })
 
 function hostTerminal(output$: Subject<Uint8Array>, inputs: Uint8Array[]): HostTerminal {
