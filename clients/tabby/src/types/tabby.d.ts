@@ -4,6 +4,11 @@
  * implementations are provided by Tabby at runtime (these modules are webpack externals).
  * Extend these declarations as later stages use more of the Tabby API.
  */
+declare module '*.html' {
+    const content: string
+    export default content
+}
+
 declare module 'tabby-core' {
     import { Observable } from 'rxjs'
 

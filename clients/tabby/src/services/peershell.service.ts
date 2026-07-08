@@ -3,10 +3,13 @@ import { map } from 'rxjs'
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap'
 import { AppService, ConfigService, NotificationsService, BaseTabComponent, PromptModalComponent } from 'tabby-core'
 import { BaseTerminalTabComponent, ResizeEvent } from 'tabby-terminal'
-import { WebSocketTransport, normalizeRoomCode, isValidRoomCode, generatePin, PinProvider } from '@peershell/protocol'
+import {
+    WebSocketTransport, normalizeRoomCode, isValidRoomCode, generatePin, PinProvider, HttpTunnelHandler,
+} from '@peershell/protocol'
 
 import { ShareController, HostTerminal } from '../host/shareController'
 import { MirrorTabComponent } from '../guest/mirrorTab.component'
+import webClientHtml from '../../assets/web-client.html'
 
 /** Owns the active host shares and adapts a Tabby terminal tab to the transport-driven controller. */
 @Injectable({ providedIn: 'root' })
@@ -47,6 +50,10 @@ export class PeershellService {
         // cleartext (challenge-response only). The host shares it with the intended guest out-of-band.
         const pin = generatePin(6)
         const transport = new WebSocketTransport()
+        // Serve the embedded web-client to browsers opening the magic-link, tunneled over this same
+        // outbound connection. Path is whitelisted inside HttpTunnelHandler (only '/').
+        // eslint-disable-next-line no-new
+        new HttpTunnelHandler(transport, () => webClientHtml)
         const controller = new ShareController(transport, this.adapt(tab), pin, {
             onSession: h => this.notifications.info(`peershell: sharing — PIN ${pin}`, h.magicLink),
             onAuthenticated: () => this.notifications.notice('peershell: guest connected'),
