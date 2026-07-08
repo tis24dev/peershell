@@ -557,6 +557,16 @@ function startRelay(port = 0, opts = {}) {
         const server = http.createServer((req, res) => {
             const url = (req.url || '').split('?')[0]
             const method = req.method || 'GET'
+            // CORS: the account REST API is called cross-origin from the Tabby/Electron renderer (and
+            // the browser web-client). No cookies are used (bearer token in a header), so '*' is safe.
+            res.setHeader('Access-Control-Allow-Origin', '*')
+            res.setHeader('Access-Control-Allow-Headers', 'authorization, content-type')
+            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+            if (method === 'OPTIONS') {
+                res.writeHead(204)
+                res.end()
+                return
+            }
             if ((method === 'GET' && url === '/sessions') || (method === 'POST' && REST_POST.has(url))) {
                 return handleRest(req, res)
             }
