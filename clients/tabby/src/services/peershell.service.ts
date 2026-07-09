@@ -105,6 +105,9 @@ export class PeershellService {
         // Grace window: a guest disconnect (closed tab or a brief network blip) does not kill the share
         // immediately — wait ~10s for a reconnect before tearing it down.
         let graceTimer: ReturnType<typeof setTimeout> | null = null
+        // Auto-kill a share that never gets a connected guest within 5 minutes of starting.
+        let established = false
+        let establishTimer: ReturnType<typeof setTimeout> | null = null
         const controller = new ShareController(transport, this.adapt(tab), pin, {
             onSession: h => {
                 const modal = this.ngbModal.open(ShareInfoModalComponent, { backdrop: 'static', size: 'lg' })
@@ -118,7 +121,14 @@ export class PeershellService {
                     this.notifications.notice('peershell: guest reconnected')
                 }
             },
-            onAuthenticated: () => this.notifications.notice('peershell: guest connected'),
+            onAuthenticated: () => {
+                established = true
+                if (establishTimer) {
+                    clearTimeout(establishTimer)
+                    establishTimer = null
+                }
+                this.notifications.notice('peershell: guest connected')
+            },
             onPinFailed: () => this.notifications.error('peershell: guest failed the PIN'),
             onPeerLeft: () => {
                 if (graceTimer) {
@@ -142,10 +152,20 @@ export class PeershellService {
 
         this.shares.set(tab, controller)
         tab.destroyed$.subscribe(() => this.shares.delete(tab))
+        establishTimer = setTimeout(() => {
+            if (!established) {
+                this.notifications.error('peershell: no one connected in time — sharing stopped')
+                this.stopSharing(tab)
+            }
+        }, 300000)
 
         try {
             await controller.start(serverUrl, token)
         } catch (err) {
+            if (establishTimer) {
+                clearTimeout(establishTimer)
+                establishTimer = null
+            }
             this.shares.delete(tab)
             this.notifications.error('peershell: could not connect to the server', String(err))
         }
