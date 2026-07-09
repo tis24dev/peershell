@@ -21,3 +21,11 @@ export function base64ToBytes(b64: string): Uint8Array {
 
 export const utf8ToBase64 = (s: string): string => bytesToBase64(new TextEncoder().encode(s))
 export const base64ToUtf8 = (b64: string): string => new TextDecoder().decode(base64ToBytes(b64))
+
+/**
+ * base64url without padding (RFC 4648 section 5). Safe for URLs and, crucially, for WebSocket
+ * subprotocol names (RFC 6455 tokens forbid `+`, `/`, `=`, space, comma), so a credential can ride
+ * in the `Sec-WebSocket-Protocol` handshake header instead of the logged URL query.
+ */
+export const utf8ToBase64Url = (s: string): string =>
+    utf8ToBase64(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')

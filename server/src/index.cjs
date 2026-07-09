@@ -34,6 +34,29 @@ const LOGIN_MAX_FAILS = 5
 const LOGIN_LOCK_MS = 15 * 60 * 1000
 const REG_MAX_PER_IP = 5
 const REG_WINDOW_MS = 24 * 60 * 60 * 1000
+// Auth credential carried in the WS handshake as Sec-WebSocket-Protocol: peershell.bearer.<base64url>,
+// with the non-secret sentinel peershell.v1 echoed back. Keeps the token out of the logged URL query.
+const AUTH_SENTINEL = 'peershell.v1'
+const BEARER_PREFIX = 'peershell.bearer.'
+
+/** Decode the account token from the Sec-WebSocket-Protocol header, or null if absent/malformed. */
+function bearerFromProtocolHeader(header) {
+    if (!header) {
+        return null
+    }
+    for (const part of String(header).split(',')) {
+        const v = part.trim()
+        if (v.startsWith(BEARER_PREFIX)) {
+            const b64 = v.slice(BEARER_PREFIX.length).replace(/-/g, '+').replace(/_/g, '/')
+            try {
+                return Buffer.from(b64, 'base64').toString('utf8') || null
+            } catch {
+                return null
+            }
+        }
+    }
+    return null
+}
 const TOTP_SESSION_TTL_MS = 5 * 60 * 1000
 const TOTP_MAX_FAILS = 3
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -318,6 +341,32 @@ function startRelay(port = 0, opts = {}) {
         }
         let boundPort = port
         let publicUrl = opts.publicUrl || ''
+
+        // CSWSH defense: reject cross-origin browser WS upgrades. Non-browser clients (Node, the Tabby
+        // Electron renderer whose origin is file://) send no browser origin and are allowed; the web
+        // guest is same-origin as publicUrl. '*' in opts.allowedOrigins disables the check (escape hatch).
+        const allowedOrigins = new Set((opts.allowedOrigins || []).map(String))
+        try {
+            if (publicUrl) {
+                allowedOrigins.add(new URL(publicUrl).origin)
+            }
+        } catch { /* ignore malformed publicUrl */ }
+        const originAllowed = origin => {
+            if (allowedOrigins.has('*')) {
+                return true
+            }
+            if (!origin || origin === 'null' || origin === 'file://') {
+                return true // non-browser client or file:// (Electron renderer) — not a CSWSH vector
+            }
+            if (allowedOrigins.has(origin)) {
+                return true
+            }
+            try {
+                return !!publicUrl && new URL(publicUrl).origin === origin // picks up a post-bind publicUrl
+            } catch {
+                return false
+            }
+        }
 
         const rooms = new Map() // room -> { host, guest, accountId, magicLink, createdAt }
         const magicTokens = new Map() // magic-link token -> { room, expiresAt }
@@ -850,7 +899,22 @@ function startRelay(port = 0, opts = {}) {
             }
         })
 
-        const wss = new WebSocketServer({ server })
+        const wss = new WebSocketServer({
+            server,
+            // Reject cross-origin browser upgrades before the socket opens (CSWSH). Note: verifyClient is
+            // a browser-only defense (non-browser clients can forge Origin); the PIN gate is the real lock.
+            verifyClient: (info, cb) => {
+                if (originAllowed(info.origin)) {
+                    cb(true)
+                } else {
+                    console.log(`[peershell] rejected WS upgrade from disallowed origin: ${info.origin}`)
+                    cb(false, 403, 'Forbidden')
+                }
+            },
+            // Echo ONLY the non-secret sentinel, never the credential-bearing subprotocol. The ws default
+            // echoes the FIRST offered protocol (= the token here), which would re-leak it in the 101.
+            handleProtocols: protocols => (protocols.has(AUTH_SENTINEL) ? AUTH_SENTINEL : false),
+        })
 
         wss.on('connection', (sock, req) => {
             sock._room = null
@@ -858,11 +922,13 @@ function startRelay(port = 0, opts = {}) {
             sock._kind = 'desktop'
             sock._role = 'guest'
             sock._lastSeen = now()
-            // account token (host) rides on the WS upgrade URL query: ?token=<accountToken>
+            // Account token (host) rides in the Sec-WebSocket-Protocol handshake header as
+            // peershell.bearer.<base64url>. One-release fallback: the legacy ?token= query param.
             let acct = null
             try {
-                const q = new URL(req.url || '/', 'http://x').searchParams.get('token')
-                acct = q ? accountFromToken(q) : null
+                const fromHeader = bearerFromProtocolHeader(req.headers['sec-websocket-protocol'])
+                const raw = fromHeader || new URL(req.url || '/', 'http://x').searchParams.get('token')
+                acct = raw ? accountFromToken(raw) : null
             } catch { /* ignore */ }
             sock._account = acct
 

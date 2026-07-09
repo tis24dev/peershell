@@ -7,6 +7,12 @@ import {
     ControlMessage, Channel, encodeControl, decodeControl, encodeBinaryFrame, decodeBinaryFrame,
 } from './protocol'
 import { SessionTransport, TransportState, BinaryPayload } from './api'
+import { utf8ToBase64Url } from './base64'
+
+/** Non-secret subprotocol the server echoes back; carries no credential. */
+const AUTH_SENTINEL = 'peershell.v1'
+/** Prefix for the credential-bearing subprotocol offered by the client. Never echoed by the server. */
+const BEARER_PREFIX = 'peershell.bearer.'
 
 /** Minimal browser-WebSocket surface we rely on (satisfied by DOM WebSocket and the `ws` package). */
 export interface WebSocketLike {
@@ -19,7 +25,7 @@ export interface WebSocketLike {
     onerror: ((ev: unknown) => void) | null
 }
 
-export type WebSocketCtor = new (url: string) => WebSocketLike
+export type WebSocketCtor = new (url: string, protocols?: string | string[]) => WebSocketLike
 
 const KEEPALIVE_INTERVAL_MS = 20000
 
@@ -54,12 +60,12 @@ export class WebSocketTransport implements SessionTransport {
     connect(url: string, token?: string): Promise<void> {
         return new Promise<void>((resolve, reject) => {
             this.setState('connecting')
-            const full = token
-                ? `${url}${url.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`
-                : url
+            // The credential rides in the Sec-WebSocket-Protocol handshake header (base64url), NOT the URL
+            // query, so it never lands in reverse-proxy/access logs. The server echoes only AUTH_SENTINEL.
+            const protocols = token ? [AUTH_SENTINEL, BEARER_PREFIX + utf8ToBase64Url(token)] : undefined
             let ws: WebSocketLike
             try {
-                ws = new this.WS(full)
+                ws = protocols ? new this.WS(url, protocols) : new this.WS(url)
             } catch (err) {
                 this.setState('closed')
                 reject(err instanceof Error ? err : new Error(String(err)))

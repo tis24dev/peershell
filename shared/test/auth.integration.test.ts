@@ -80,6 +80,31 @@ function createSessionWs(token?: string): Promise<any> {
     })
 }
 
+// Same create-session leg, but the account token rides in the Sec-WebSocket-Protocol subprotocol
+// (peershell.bearer.<base64url>) instead of the URL. Resolves with the message + negotiated subprotocol.
+function createSessionWsSub(token: string): Promise<{ msg: any, proto: string }> {
+    return new Promise((resolve, reject) => {
+        const b64url = Buffer.from(token).toString('base64url')
+        const ws = new WebSocket(relay.url, ['peershell.v1', 'peershell.bearer.' + b64url])
+        const to = setTimeout(() => { ws.close(); reject(new Error('timeout')) }, 6000)
+        ws.on('open', () => {
+            ws.send(JSON.stringify({ v: 1, t: 'hello', role: 'host', kind: 'desktop' }))
+            ws.send(JSON.stringify({ v: 1, t: 'create-session' }))
+        })
+        ws.on('message', d => {
+            let m: any = null
+            try { m = JSON.parse(d.toString()) } catch { /* ignore */ }
+            if (m && (m.t === 'session-created' || m.t === 'error')) {
+                clearTimeout(to)
+                const proto = ws.protocol
+                ws.close()
+                resolve({ msg: m, proto })
+            }
+        })
+        ws.on('error', e => { clearTimeout(to); reject(e) })
+    })
+}
+
 async function registerVerifyLogin(email: string, password = 'CorrectHorse9'): Promise<string> {
     await api('POST', '/register', { email, password })
     await api('POST', '/verify-email', { email, code: codeFor(email) })
@@ -191,7 +216,31 @@ it('WS create-session is gated: rejected without a token, accepted with one', as
     expect(ok.t).toBe('session-created')
     expect(ok.room).toMatch(/^[2-9A-HJ-NP-Z]{6}$/)
     expect(ok.magicLink).toContain('/s/')
+
+    // The same token is accepted via the Sec-WebSocket-Protocol subprotocol (not the URL), and the
+    // server echoes ONLY the non-secret sentinel back, never the token.
+    const sub = await createSessionWsSub(token)
+    expect(sub.msg.t).toBe('session-created')
+    expect(sub.proto).toBe('peershell.v1')
 }, 20000)
+
+it('rejects a cross-origin WS upgrade (CSWSH) but allows the configured origin and no-origin clients', async () => {
+    const r3 = await server.startRelay(0, { requireAuth: false, ephemeral: true, allowedOrigins: ['https://panel.example'] })
+    const dial = (origin?: string): Promise<'open' | 'rejected'> => new Promise(resolve => {
+        const ws = new WebSocket(r3.url, origin ? { origin } : undefined)
+        const to = setTimeout(() => { ws.close(); resolve('rejected') }, 6000)
+        ws.on('open', () => { clearTimeout(to); ws.close(); resolve('open') })
+        ws.on('error', () => { clearTimeout(to); resolve('rejected') })
+        ws.on('unexpected-response', () => { clearTimeout(to); resolve('rejected') })
+    })
+    try {
+        expect(await dial('https://evil.example')).toBe('rejected')
+        expect(await dial('https://panel.example')).toBe('open')
+        expect(await dial(undefined)).toBe('open') // non-browser client (no Origin)
+    } finally {
+        await r3.close()
+    }
+}, 25000)
 
 it('optional TOTP: setup -> enable -> login needs 2FA -> verify issues token', async () => {
     const email = 'erin@example.com'

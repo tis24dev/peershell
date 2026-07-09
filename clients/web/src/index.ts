@@ -202,7 +202,9 @@ async function main(): Promise<void> {
     }
 
     const connectAndJoin = async (): Promise<void> => {
-        await transport.connect(wsUrl(), token)
+        // Connect without a credential on the handshake: the magic-link token is delivered in the `join`
+        // control frame below (WS payload, never logged), so it must not ride the URL query.
+        await transport.connect(wsUrl())
         setStatus('')
         controller.join({ token, kind: 'web' })
     }
