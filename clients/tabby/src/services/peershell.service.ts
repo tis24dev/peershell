@@ -111,7 +111,7 @@ export class PeershellService {
         // eslint-disable-next-line no-new
         new HttpTunnelHandler(transport, () => webClientHtml)
         // Grace window: a guest disconnect (closed tab or a brief network blip) does not kill the share
-        // immediately — wait ~10s for a reconnect before tearing it down.
+        // immediately: wait ~10s for a reconnect before tearing it down.
         // Per-share timers, owned by this tab so stopSharing() cancels them on teardown. Otherwise a
         // stale grace/establish timer could later fire stopSharing() on a tab the host has re-shared.
         const timers: {
@@ -148,10 +148,10 @@ export class PeershellService {
                 if (timers.grace) {
                     return
                 }
-                this.notifications.notice('peershell: guest disconnected — closing in 10s unless they reconnect')
+                this.notifications.notice('peershell: guest disconnected, closing in 10s unless they reconnect')
                 timers.grace = setTimeout(() => {
                     timers.grace = null
-                    this.stopSharing(tab, 'peershell: guest gone — sharing stopped')
+                    this.stopSharing(tab, 'peershell: guest gone, sharing stopped')
                 }, 10000)
             },
             onError: (code, message) => {
@@ -174,7 +174,7 @@ export class PeershellService {
         timers.establish = setTimeout(() => {
             timers.establish = null
             if (!established) {
-                this.notifications.error('peershell: no one connected in time — sharing stopped')
+                this.notifications.error('peershell: no one connected in time, sharing stopped')
                 this.stopSharing(tab)
             }
         }, 300000)
@@ -254,7 +254,7 @@ export class PeershellService {
             type: 'warning',
             message: 'Share this terminal with peershell?',
             detail: 'Guests get full read-write access to this shell. The relay server sees all terminal '
-                + 'traffic in clear text — there is no end-to-end encryption yet. Do not share sensitive '
+                + 'traffic in clear text. There is no end-to-end encryption yet. Do not share sensitive '
                 + 'sessions on a server you do not trust; self-host the server in production.',
             buttons: ['Share', 'Cancel'],
             defaultId: 1,

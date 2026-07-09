@@ -44,7 +44,7 @@ import { PeershellSettingsTabComponent } from './settings/settings-tab.component
 export default class PeershellModule {
     constructor (_peershell: PeershellService) {
         // eslint-disable-next-line no-console
-        console.log(`[peershell] plugin loaded — protocol v${PROTOCOL_VERSION}`)
+        console.log(`[peershell] plugin loaded, protocol v${PROTOCOL_VERSION}`)
     }
 }
 

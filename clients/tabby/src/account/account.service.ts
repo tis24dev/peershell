@@ -17,7 +17,7 @@ export interface AccountApiResult {
  * Client-neutral account layer: talks the server's REST API (fetch) and keeps the bearer token.
  *
  * Token storage: Tabby config store (`peershell.account`), persisted via ConfigService.save(). This is
- * an MVP tradeoff — the Tabby vault (encrypted at rest) is the intended hardening and can replace this
+ * an MVP tradeoff: the Tabby vault (encrypted at rest) is the intended hardening and can replace this
  * behind the same getToken/persist surface without touching callers.
  */
 @Injectable({ providedIn: 'root' })

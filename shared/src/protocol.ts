@@ -1,5 +1,5 @@
 /**
- * peershell wire protocol — control messages + binary terminal framing.
+ * peershell wire protocol: control messages + binary terminal framing.
  * Framework-neutral (no Angular/RxJS/Node-Buffer). See PROTOCOL.md for the spec.
  */
 

@@ -1,7 +1,7 @@
 /**
  * Host side of the reverse HTTP tunnel. The server forwards a browser's page request as an
  * `http-get` frame over the host's outbound WS; the host answers with `http-response` carrying the
- * embedded web-client HTML. NOT a real HTTP server (the renderer opens no port) — just frame handling.
+ * embedded web-client HTML. NOT a real HTTP server (the renderer opens no port), just frame handling.
  *
  * Strictly whitelists the path (only `/`) to prevent path-traversal / SSRF via a malicious guest.
  */

@@ -163,7 +163,7 @@ export class LoginModalComponent {
             }
             if (r.status === 200 && r.alreadyRegistered) {
                 this.switch('login')
-                this.info = 'That email is already registered — please log in.'
+                this.info = 'That email is already registered. Please log in.'
                 return
             }
             this.fail(r)

@@ -55,7 +55,7 @@ interface LiveSession { room: string, magicLink: string, hasGuest: boolean, crea
                 <tbody>
                     <tr *ngFor="let s of sessions">
                         <td><code>{{ s.room }}</code></td>
-                        <td>{{ s.hasGuest ? 'connected' : '—' }}</td>
+                        <td>{{ s.hasGuest ? 'connected' : '-' }}</td>
                         <td><small class="text-muted">{{ s.magicLink }}</small></td>
                     </tr>
                 </tbody>
@@ -125,7 +125,7 @@ export class PeershellSettingsTabComponent {
         try {
             const r = await this.account.getSessions()
             if (r.error) {
-                this.error = r.error === 'unauthorized' ? 'Session expired — log in again.' : `Could not load shares (${r.error}).`
+                this.error = r.error === 'unauthorized' ? 'Session expired. Log in again.' : `Could not load shares (${r.error}).`
                 this.sessions = []
             } else {
                 this.sessions = (r.sessions as LiveSession[]).filter(s => s.live !== false)
