@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core'
 import { map } from 'rxjs'
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap'
-import { AppService, ConfigService, NotificationsService, BaseTabComponent, PromptModalComponent, PlatformService } from 'tabby-core'
+import { AppService, ConfigService, NotificationsService, BaseTabComponent, SplitTabComponent, PromptModalComponent, PlatformService } from 'tabby-core'
 import { BaseTerminalTabComponent, ResizeEvent } from 'tabby-terminal'
 import {
     WebSocketTransport, normalizeRoomCode, isValidRoomCode, generatePin, PinProvider, HttpTunnelHandler,
@@ -32,7 +32,11 @@ export class PeershellService {
     }
 
     async shareActive(): Promise<void> {
-        const tab = this.app.activeTab
+        // In modern Tabby every top-level tab is a SplitTabComponent; the terminal is the focused pane.
+        let tab = this.app.activeTab
+        if (tab instanceof SplitTabComponent) {
+            tab = tab.getFocusedTab()
+        }
         if (tab instanceof BaseTerminalTabComponent) {
             await this.startSharing(tab)
         } else {

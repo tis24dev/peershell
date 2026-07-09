@@ -26,6 +26,11 @@ declare module 'tabby-core' {
         subscribeUntilDestroyed<T>(observable: Observable<T>, callback: (value: T) => void): void
     }
 
+    export class SplitTabComponent extends BaseTabComponent {
+        getFocusedTab(): BaseTabComponent | null
+        getAllTabs(): BaseTabComponent[]
+    }
+
     export interface ToolbarButton {
         icon?: string
         title: string
