@@ -130,3 +130,17 @@ it('ignores late events from a socket superseded by a reconnect', async () => {
     expect(states.length).toBe(stateCount)
     expect(controls).toEqual([])
 })
+
+it('a socket rejected before it opens cannot deliver a late message', async () => {
+    jest.useFakeTimers()
+    const transport = new WebSocketTransport(WS)
+    const controls: string[] = []
+    transport.onControl(m => controls.push(m.t))
+    const p = transport.connect('ws://x')
+    const staleMsg = last.onmessage // capture before the reject detaches it
+    last.onclose?.(null) // reject before open
+    await expect(p).rejects.toThrow(/closed during connect/)
+    // The rejected socket is severed, so a late frame from it must not reach the app.
+    staleMsg?.({ data: encodeControl({ t: 'pin-ok' }) })
+    expect(controls).toEqual([])
+})

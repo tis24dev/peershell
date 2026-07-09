@@ -89,6 +89,18 @@ export class WebSocketTransport implements SessionTransport {
                 }
             }
             const current = (): boolean => this.ws === ws
+            // Fail the connect once: settle, cancel the timer, sever the socket (teardownSocket detaches
+            // its handlers so no late onmessage/onclose can reach dispatch/setState), mark closed, reject.
+            const failConnect = (message: string): void => {
+                if (settled) {
+                    return
+                }
+                settled = true
+                clear()
+                this.teardownSocket()
+                this.setState('closed')
+                reject(new Error(message))
+            }
             ws.onopen = () => {
                 if (settled || !current()) {
                     return
@@ -100,23 +112,16 @@ export class WebSocketTransport implements SessionTransport {
                 resolve()
             }
             ws.onerror = () => {
-                if (settled || !current()) {
-                    return
+                if (current()) {
+                    failConnect('peershell: WebSocket connection failed')
                 }
-                settled = true
-                clear()
-                this.setState('closed')
-                reject(new Error('peershell: WebSocket connection failed'))
             }
             ws.onclose = () => {
                 if (!current()) {
                     return // a superseded socket closing: it no longer owns this transport
                 }
                 if (!settled) {
-                    settled = true
-                    clear()
-                    this.setState('closed')
-                    reject(new Error('peershell: WebSocket closed during connect'))
+                    failConnect('peershell: WebSocket closed during connect')
                 } else {
                     // Post-open close: normal teardown. setState('closed') stops the keepalive.
                     this.setState('closed')
@@ -128,16 +133,9 @@ export class WebSocketTransport implements SessionTransport {
                 }
             }
             timer = setTimeout(() => {
-                if (settled || !current()) {
-                    return
+                if (current()) {
+                    failConnect('peershell: WebSocket connect timed out')
                 }
-                settled = true
-                timer = null
-                // Detach + close the stalled socket first (teardownSocket clears onclose before close()),
-                // so its close cannot re-enter here; then report the single 'closed' transition.
-                this.teardownSocket()
-                this.setState('closed')
-                reject(new Error('peershell: WebSocket connect timed out'))
             }, CONNECT_TIMEOUT_MS)
             // Don't let a pending connect timeout hold a Node process (or test runner) open.
             const t = timer as unknown as { unref?: () => void }
