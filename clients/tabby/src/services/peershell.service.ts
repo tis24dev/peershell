@@ -11,6 +11,7 @@ import { ShareController, HostTerminal } from '../host/shareController'
 import { MirrorTabComponent } from '../guest/mirrorTab.component'
 import { AccountService } from '../account/account.service'
 import { LoginModalComponent } from '../account/login-modal.component'
+import { ShareInfoModalComponent } from '../host/share-info-modal.component'
 import webClientHtml from '../../assets/web-client.html'
 
 /** Owns the active host shares and adapts a Tabby terminal tab to the transport-driven controller. */
@@ -77,7 +78,11 @@ export class PeershellService {
         // eslint-disable-next-line no-new
         new HttpTunnelHandler(transport, () => webClientHtml)
         const controller = new ShareController(transport, this.adapt(tab), pin, {
-            onSession: h => this.notifications.info(`peershell: sharing — PIN ${pin}`, h.magicLink),
+            onSession: h => {
+                const modal = this.ngbModal.open(ShareInfoModalComponent, { backdrop: 'static', size: 'lg' })
+                modal.componentInstance.magicLink = h.magicLink
+                modal.componentInstance.pin = pin
+            },
             onAuthenticated: () => this.notifications.notice('peershell: guest connected'),
             onPinFailed: () => this.notifications.error('peershell: guest failed the PIN'),
             onPeerLeft: () => this.notifications.notice('peershell: peer disconnected'),

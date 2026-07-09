@@ -15,6 +15,7 @@ import { PeershellToolbarButtonProvider } from './providers/toolbarButtonProvide
 import { PeershellContextMenu } from './providers/tabContextMenu'
 import { MirrorTabComponent } from './guest/mirrorTab.component'
 import { LoginModalComponent } from './account/login-modal.component'
+import { ShareInfoModalComponent } from './host/share-info-modal.component'
 import { PeershellSettingsTabProvider } from './settings/settings-tab.provider'
 import { PeershellSettingsTabComponent } from './settings/settings-tab.component'
 
@@ -36,6 +37,7 @@ import { PeershellSettingsTabComponent } from './settings/settings-tab.component
     declarations: [
         MirrorTabComponent,
         LoginModalComponent,
+        ShareInfoModalComponent,
         PeershellSettingsTabComponent,
     ],
 })
