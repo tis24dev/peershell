@@ -18,6 +18,9 @@ import webClientHtml from '../../assets/web-client.html'
 @Injectable({ providedIn: 'root' })
 export class PeershellService {
     private readonly shares = new Map<BaseTerminalTabComponent, ShareController>()
+    // Per-share grace/establish timers, keyed by tab so stopSharing() owns their teardown.
+    private readonly shareTimers = new Map<BaseTerminalTabComponent,
+        { grace: ReturnType<typeof setTimeout> | null, establish: ReturnType<typeof setTimeout> | null }>()
 
     constructor(
         private readonly app: AppService,
@@ -105,10 +108,13 @@ export class PeershellService {
         new HttpTunnelHandler(transport, () => webClientHtml)
         // Grace window: a guest disconnect (closed tab or a brief network blip) does not kill the share
         // immediately — wait ~10s for a reconnect before tearing it down.
-        let graceTimer: ReturnType<typeof setTimeout> | null = null
+        // Per-share timers, owned by this tab so stopSharing() cancels them on teardown. Otherwise a
+        // stale grace/establish timer could later fire stopSharing() on a tab the host has re-shared.
+        const timers: { grace: ReturnType<typeof setTimeout> | null, establish: ReturnType<typeof setTimeout> | null } =
+            { grace: null, establish: null }
+        this.shareTimers.set(tab, timers)
         // Auto-kill a share that never gets a connected guest within 5 minutes of starting.
         let established = false
-        let establishTimer: ReturnType<typeof setTimeout> | null = null
         const controller = new ShareController(transport, this.adapt(tab), pin, {
             onSession: h => {
                 const modal = this.ngbModal.open(ShareInfoModalComponent, { backdrop: 'static', size: 'lg' })
@@ -116,41 +122,36 @@ export class PeershellService {
                 modal.componentInstance.pin = pin
             },
             onPeerJoined: () => {
-                if (graceTimer) {
-                    clearTimeout(graceTimer)
-                    graceTimer = null
+                if (timers.grace) {
+                    clearTimeout(timers.grace)
+                    timers.grace = null
                     this.notifications.notice('peershell: guest reconnected')
                 }
             },
             onAuthenticated: () => {
                 established = true
-                if (establishTimer) {
-                    clearTimeout(establishTimer)
-                    establishTimer = null
+                if (timers.establish) {
+                    clearTimeout(timers.establish)
+                    timers.establish = null
                 }
                 this.notifications.notice('peershell: guest connected')
             },
             onPinFailed: () => this.notifications.error('peershell: guest failed the PIN'),
             onPeerLeft: () => {
-                if (graceTimer) {
+                if (timers.grace) {
                     return
                 }
                 this.notifications.notice('peershell: guest disconnected — closing in 10s unless they reconnect')
-                graceTimer = setTimeout(() => {
-                    graceTimer = null
+                timers.grace = setTimeout(() => {
+                    timers.grace = null
                     this.stopSharing(tab, 'peershell: guest gone — sharing stopped')
                 }, 10000)
             },
             onError: (code, message) => {
                 if (code === 'unauthorized') {
                     void this.account.clearLocal()
-                    // Tear the share down now (closes the WS, drops the share entry) instead of leaving a
-                    // dead session up until the 5-min establish timer fires. stopSharing does not touch
-                    // establishTimer, so clear it here.
-                    if (establishTimer) {
-                        clearTimeout(establishTimer)
-                        establishTimer = null
-                    }
+                    // Tear the share down now (closes the WS, cancels this share's timers, drops the entry)
+                    // instead of leaving a dead session up until the 5-min establish timer fires.
                     this.stopSharing(tab, 'peershell: session expired, log in and share again')
                 } else {
                     this.notifications.error(`peershell: ${code}`, message)
@@ -159,8 +160,12 @@ export class PeershellService {
         })
 
         this.shares.set(tab, controller)
-        tab.destroyed$.subscribe(() => this.shares.delete(tab))
-        establishTimer = setTimeout(() => {
+        tab.destroyed$.subscribe(() => {
+            this.shares.delete(tab)
+            this.clearShareTimers(tab)
+        })
+        timers.establish = setTimeout(() => {
+            timers.establish = null
             if (!established) {
                 this.notifications.error('peershell: no one connected in time — sharing stopped')
                 this.stopSharing(tab)
@@ -170,10 +175,7 @@ export class PeershellService {
         try {
             await controller.start(serverUrl, token)
         } catch (err) {
-            if (establishTimer) {
-                clearTimeout(establishTimer)
-                establishTimer = null
-            }
+            this.clearShareTimers(tab)
             this.shares.delete(tab)
             this.notifications.error('peershell: could not connect to the server', String(err))
         }
@@ -296,12 +298,31 @@ export class PeershellService {
     }
 
     stopSharing(tab: BaseTerminalTabComponent, note = 'peershell: sharing stopped'): void {
+        // Cancel this share's timers first so a pending grace/establish timer cannot later fire on a tab
+        // the host has since re-shared.
+        this.clearShareTimers(tab)
         const controller = this.shares.get(tab)
         if (controller) {
             controller.stop('stopped')
             this.shares.delete(tab)
             this.notifications.notice(note)
         }
+    }
+
+    private clearShareTimers(tab: BaseTerminalTabComponent): void {
+        const t = this.shareTimers.get(tab)
+        if (!t) {
+            return
+        }
+        if (t.grace) {
+            clearTimeout(t.grace)
+            t.grace = null
+        }
+        if (t.establish) {
+            clearTimeout(t.establish)
+            t.establish = null
+        }
+        this.shareTimers.delete(tab)
     }
 
     private adapt(tab: BaseTerminalTabComponent): HostTerminal {
