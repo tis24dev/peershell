@@ -1,0 +1,71 @@
+name: Release Guard
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - edited
+      - ready_for_review
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  release-guard:
+    name: release-guard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout trusted base policy
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.base.sha }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Validate release PR
+        shell: bash
+        env:
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! -f .github/scripts/release-policy.sh ]]; then
+            echo "::notice::Release policy is not present on base yet; allowing bootstrap PR."
+            exit 0
+          fi
+
+          source .github/scripts/release-policy.sh
+
+          [[ "${PR_BASE_REF}" == "main" ]] || die "Release PRs must target main."
+          [[ "${PR_HEAD_REF}" == "dev" ]] || die "main only accepts release PRs from dev."
+          [[ "${PR_HEAD_REPO}" == "${REPOSITORY}" ]] || die "Release PRs must come from the same repository."
+
+          # Maintenance (non-release) PRs dev -> main carry no release marker. Allow them:
+          # post-merge syncs dev without publishing a release.
+          if ! TAG="$(extract_pr_marker release-tag)"; then
+            notice "No release marker in PR body; treating as a maintenance dev -> main PR."
+            exit 0
+          fi
+
+          validate_release_tag "${TAG}"
+
+          # Validate against the LIVE state of dev so review fix commits are fine as long
+          # as the workspace versions still match the release tag.
+          git fetch --force origin dev
+          DEV_SHA="$(git rev-parse origin/dev)"
+
+          assert_versions_match_tag "${DEV_SHA}" "${TAG}"

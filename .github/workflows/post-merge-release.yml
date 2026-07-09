@@ -1,0 +1,109 @@
+name: Post Merge Release
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: post-merge-release
+  cancel-in-progress: false
+
+env:
+  GH_TOKEN: ${{ secrets.PEERSHELL_RELEASE_BOT_TOKEN || github.token }}
+  GITHUB_TOKEN: ${{ secrets.PEERSHELL_RELEASE_BOT_TOKEN || github.token }}
+
+jobs:
+  finalize-release:
+    name: finalize-release
+    if: >
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.ref == 'dev' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.PEERSHELL_RELEASE_BOT_TOKEN || github.token }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Finalize release
+        shell: bash
+        env:
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          source .github/scripts/release-policy.sh
+
+          HAS_RELEASE_MARKER="false"
+          TAG=""
+
+          if TAG="$(extract_pr_marker release-tag)"; then
+            HAS_RELEASE_MARKER="true"
+            validate_release_tag "${TAG}"
+          else
+            notice "No release marker found; syncing dev to the squash commit without publishing a release."
+          fi
+
+          git fetch --force origin dev main
+
+          MAIN_SHA="$(git rev-parse origin/main)"
+          DEV_SHA="$(git rev-parse origin/dev)"
+
+          [[ "${MERGE_SHA}" == "${MAIN_SHA}" ]] || die "main (${MAIN_SHA}) does not point to the PR merge commit (${MERGE_SHA})."
+
+          PARENT_COUNT="$(git show -s --format=%P "${MERGE_SHA}" | wc -w | tr -d ' ')"
+          [[ "${PARENT_COUNT}" == "1" ]] || die "The PR was not squash-merged; refusing to create a release."
+
+          # The squash commit on main must capture EXACTLY the current dev tree (compare
+          # trees, so review fix commits are fine as long as content equals dev).
+          MERGE_TREE="$(git rev-parse "${MERGE_SHA}^{tree}")"
+          DEV_TREE="$(git rev-parse "origin/dev^{tree}")"
+          [[ "${MERGE_TREE}" == "${DEV_TREE}" ]] || die "origin/dev content differs from the merged release; refusing to overwrite dev. Reconcile dev with main manually."
+
+          if [[ "${HAS_RELEASE_MARKER}" == "true" ]]; then
+            assert_versions_match_tag "${MERGE_SHA}" "${TAG}"
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Fast-forward dev onto the squash commit (lease so a concurrent push aborts).
+          git push origin "${MERGE_SHA}:refs/heads/dev" --force-with-lease="refs/heads/dev:${DEV_SHA}"
+
+          if [[ "${HAS_RELEASE_MARKER}" != "true" ]]; then
+            notice "dev synchronized to ${MERGE_SHA}; no release marker was present."
+            exit 0
+          fi
+
+          # The vX.Y.Z tag is immutable: it must NOT exist yet (we only CREATE it, once).
+          # Gates FAIL CLOSED on transient errors.
+          assert_release_absent "${TAG}"
+          assert_release_tag_absent "${TAG}"
+
+          # Create the tag AND publish the release in one step. `gh release create` with a
+          # not-yet-existing tag CREATES it at --target (the squash commit) = a tag CREATION,
+          # which the immutable-tag ruleset allows. The `release: published` event then fires
+          # release.yml to build + attach assets + npm publish. (Must be created by the PAT so
+          # the downstream workflow triggers.)
+          RELEASE_ARGS=(release create "${TAG}" --target "${MERGE_SHA}" --title "${TAG}" --generate-notes)
+          if is_beta_tag "${TAG}"; then
+            RELEASE_ARGS+=(--prerelease)
+          fi
+
+          gh "${RELEASE_ARGS[@]}"
