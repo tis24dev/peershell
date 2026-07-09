@@ -180,14 +180,17 @@ export class PeershellService {
 
     /** Toolbar entry: pops a native dropdown menu with the peershell actions. */
     openMenu(): void {
-        const loggedIn = this.account.isLoggedIn()
+        if (!this.account.isLoggedIn()) {
+            this.platform.popupContextMenu([
+                { label: 'Log in', click: () => { this.openAccount() } },
+            ])
+            return
+        }
         this.platform.popupContextMenu([
             { label: 'Share this terminal', click: () => { void this.shareActive() } },
             { label: 'Join a shared terminal', click: () => { void this.joinShared() } },
             { type: 'separator' },
-            loggedIn
-                ? { label: `Log out (${this.account.email})`, click: () => { void this.logout() } }
-                : { label: 'Log in', click: () => { this.openAccount() } },
+            { label: `Log out (${this.account.email})`, click: () => { void this.logout() } },
         ])
     }
 
