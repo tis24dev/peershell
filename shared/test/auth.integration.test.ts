@@ -268,22 +268,25 @@ it('password reset terminates the account live host WS sessions', async () => {
     }
 }, 40000)
 
-it('WS create-session is gated: rejected without a token, accepted with one', async () => {
+it('WS create-session is gated: rejected without a token, accepted via subprotocol', async () => {
     const noAuth = await createSessionWs()
     expect(noAuth.t).toBe('error')
     expect(noAuth.code).toBe('unauthorized')
 
     const token = await registerVerifyLogin('dave@example.com')
-    const ok = await createSessionWs(token)
-    expect(ok.t).toBe('session-created')
-    expect(ok.room).toMatch(/^[2-9A-HJ-NP-Z]{6}$/)
-    expect(ok.magicLink).toContain('/s/')
 
-    // The same token is accepted via the Sec-WebSocket-Protocol subprotocol (not the URL), and the
+    // The account token is accepted via the Sec-WebSocket-Protocol subprotocol (not the URL), and the
     // server echoes ONLY the non-secret sentinel back, never the token.
     const sub = await createSessionWsSub(token)
     expect(sub.msg.t).toBe('session-created')
+    expect(sub.msg.room).toMatch(/^[2-9A-HJ-NP-Z]{6}$/)
+    expect(sub.msg.magicLink).toContain('/s/')
     expect(sub.proto).toBe('peershell.v1')
+
+    // The legacy ?token= URL fallback is gone: a valid token placed in the URL is now ignored.
+    const urlTok = await createSessionWs(token)
+    expect(urlTok.t).toBe('error')
+    expect(urlTok.code).toBe('unauthorized')
 }, 20000)
 
 it('rejects a cross-origin WS upgrade (CSWSH) but allows the configured origin and no-origin clients', async () => {

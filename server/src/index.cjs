@@ -1,12 +1,12 @@
 /**
- * @peershell/server — rendezvous + blind relay + reverse HTTP tunnel + accounts.
+ * @peershell/server: rendezvous + blind relay + reverse HTTP tunnel + accounts.
  *
  * Relay: pairs one host + one guest by room-code / magic-link token, forwards every frame verbatim,
  * and serves the host-embedded web-client to browsers that open the magic-link (GET /s/<token>).
  *
  * Accounts (Stage 6): open registration + email verification (mock-logged for MVP; SMTP = Stage 7),
  * login -> opaque bearer token, optional TOTP 2FA, logout/refresh, dashboard (GET /sessions).
- * create-session over WS is GATED behind a valid account token (?token= on the WS upgrade URL):
+ * create-session over WS is GATED behind a valid account token (Sec-WebSocket-Protocol subprotocol):
  * without it, anyone reaching the public server could open sessions. Guests do NOT need an account
  * (they authenticate to the host with the per-session PIN, peer-to-peer).
  *
@@ -147,7 +147,7 @@ async function deliverVerifyCode(email, code, cfg = {}, kind = 'verification') {
     return { delivered: 'log' }
 }
 
-// Passwords are stored ONLY as a salted, one-way scrypt hash (memory-hard) — never plaintext, and not
+// Passwords are stored ONLY as a salted, one-way scrypt hash (memory-hard), never plaintext, and not
 // recoverable by anyone (including us). Self-describing format: scrypt$N$r$p$saltHex$hashHex. Legacy
 // pbkdf2 accounts (salt+hash fields) still verify and are upgraded to scrypt on next successful login.
 const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 32 }
@@ -183,7 +183,7 @@ function verifyPassword(account, password) {
     return false
 }
 
-// --- TOTP (RFC 6238, SHA-1/30s/6-digit) — inline, zero deps ---
+// --- TOTP (RFC 6238, SHA-1/30s/6-digit), inline, zero deps ---
 function base32Encode(buf) {
     let bits = ''
     for (const byte of buf) {
@@ -360,7 +360,7 @@ function startRelay(port = 0, opts = {}) {
                 return true
             }
             if (!origin || origin === 'null' || origin === 'file://') {
-                return true // non-browser client or file:// (Electron renderer) — not a CSWSH vector
+                return true // non-browser client or file:// (Electron renderer), not a CSWSH vector
             }
             if (allowedOrigins.has(origin)) {
                 return true
@@ -643,7 +643,7 @@ function startRelay(port = 0, opts = {}) {
                             return sendJson(res, 200, { ok: true, needsVerification: true })
                         }
                         // Email not deliverable (no SMTP / send failed): don't strand the user behind a
-                        // code they can't receive — auto-verify and log them in immediately.
+                        // code they can't receive, auto-verify and log them in immediately.
                         acct.verified = true
                         acct.verifyCode = null
                         acct.lastLogin = now()
@@ -966,12 +966,11 @@ function startRelay(port = 0, opts = {}) {
             sock._role = 'guest'
             sock._lastSeen = now()
             // Account token (host) rides in the Sec-WebSocket-Protocol handshake header as
-            // peershell.bearer.<base64url>. One-release fallback: the legacy ?token= query param.
+            // peershell.bearer.<base64url>, so it never lands in reverse-proxy/access logs.
             let acct = null
             let tokenHash = null
             try {
-                const fromHeader = bearerFromProtocolHeader(req.headers['sec-websocket-protocol'])
-                const raw = fromHeader || new URL(req.url || '/', 'http://x').searchParams.get('token')
+                const raw = bearerFromProtocolHeader(req.headers['sec-websocket-protocol'])
                 acct = raw ? accountFromToken(raw) : null
                 // Remember which token authorized this socket so a password change can drop the sessions
                 // whose token it revoked while keeping the caller's current one.
