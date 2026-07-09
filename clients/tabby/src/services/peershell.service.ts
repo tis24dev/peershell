@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core'
-import { map } from 'rxjs'
+import { map, Subscription } from 'rxjs'
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap'
 import { AppService, ConfigService, NotificationsService, BaseTabComponent, SplitTabComponent, PromptModalComponent, PlatformService } from 'tabby-core'
 import { BaseTerminalTabComponent, ResizeEvent } from 'tabby-terminal'
@@ -18,9 +18,13 @@ import webClientHtml from '../../assets/web-client.html'
 @Injectable({ providedIn: 'root' })
 export class PeershellService {
     private readonly shares = new Map<BaseTerminalTabComponent, ShareController>()
-    // Per-share grace/establish timers, keyed by tab so stopSharing() owns their teardown.
-    private readonly shareTimers = new Map<BaseTerminalTabComponent,
-        { grace: ReturnType<typeof setTimeout> | null, establish: ReturnType<typeof setTimeout> | null }>()
+    // Per-share cleanup state, keyed by tab so stopSharing() owns its teardown: the grace/establish
+    // timers and the tab.destroyed$ subscription.
+    private readonly shareTimers = new Map<BaseTerminalTabComponent, {
+        grace: ReturnType<typeof setTimeout> | null,
+        establish: ReturnType<typeof setTimeout> | null,
+        destroyed: Subscription | null,
+    }>()
 
     constructor(
         private readonly app: AppService,
@@ -110,8 +114,11 @@ export class PeershellService {
         // immediately — wait ~10s for a reconnect before tearing it down.
         // Per-share timers, owned by this tab so stopSharing() cancels them on teardown. Otherwise a
         // stale grace/establish timer could later fire stopSharing() on a tab the host has re-shared.
-        const timers: { grace: ReturnType<typeof setTimeout> | null, establish: ReturnType<typeof setTimeout> | null } =
-            { grace: null, establish: null }
+        const timers: {
+            grace: ReturnType<typeof setTimeout> | null,
+            establish: ReturnType<typeof setTimeout> | null,
+            destroyed: Subscription | null,
+        } = { grace: null, establish: null, destroyed: null }
         this.shareTimers.set(tab, timers)
         // Auto-kill a share that never gets a connected guest within 5 minutes of starting.
         let established = false
@@ -160,7 +167,7 @@ export class PeershellService {
         })
 
         this.shares.set(tab, controller)
-        tab.destroyed$.subscribe(() => {
+        timers.destroyed = tab.destroyed$.subscribe(() => {
             this.shares.delete(tab)
             this.clearShareTimers(tab)
         })
@@ -321,6 +328,10 @@ export class PeershellService {
         if (t.establish) {
             clearTimeout(t.establish)
             t.establish = null
+        }
+        if (t.destroyed) {
+            t.destroyed.unsubscribe()
+            t.destroyed = null
         }
         this.shareTimers.delete(tab)
     }
