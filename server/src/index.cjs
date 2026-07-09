@@ -1096,10 +1096,11 @@ function startRelay(port = 0, opts = {}) {
                     totpSessions.delete(k)
                 }
             }
-            // Prune stale rate-limit entries so the maps do not grow unbounded. For loginFails, evict
-            // only entries with no active lock AND idle past LOGIN_FAILS_TTL_MS: an in-progress bruteforce
-            // (r.until > now(), or a recent fail refreshing r.at) is always retained, so pruning cannot
-            // reset an accumulating counter or the blocks escalation (a paced attacker still gets locked).
+            // Prune stale rate-limit entries so the maps do not grow unbounded. For loginFails, evict only
+            // entries with no active lock AND idle past LOGIN_FAILS_TTL_MS. An attacker who keeps guessing
+            // refreshes r.at and is never pruned mid-attack, so an accumulating counter or an active lock is
+            // never reset; only an entry left idle past the TTL is dropped (its blocks escalation resets,
+            // an acceptable bound since the base 5-fail lock still re-applies to any renewed attack).
             for (const [k, r] of loginFails) {
                 if (r.until <= now() && now() - (r.at || 0) >= LOGIN_FAILS_TTL_MS) {
                     loginFails.delete(k)
