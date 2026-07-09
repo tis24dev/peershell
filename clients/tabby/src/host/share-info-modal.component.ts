@@ -42,8 +42,10 @@ export class ShareInfoModalComponent {
 
     copy(text: string, what: string): void {
         if (navigator.clipboard) {
-            void navigator.clipboard.writeText(text)
+            // Only show the confirmation if the write actually succeeded.
+            navigator.clipboard.writeText(text).then(() => { this.copied = what }).catch(() => { /* no-op */ })
+            return
         }
-        this.copied = what
+        this.copied = what // no async clipboard: readonly inputs auto-select on focus for manual copy
     }
 }
