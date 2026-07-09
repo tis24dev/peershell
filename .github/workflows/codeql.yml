@@ -1,8 +1,8 @@
 name: CodeQL
 
-# Static security analysis. On a PRIVATE repo, code scanning requires GitHub Advanced
-# Security; without it the analyze step fails, so this workflow is NOT a required check
-# (it runs best-effort). Make it required once the repo is public or GHAS is enabled.
+# Static security analysis (CodeQL). The repo is public, so code scanning runs without
+# GitHub Advanced Security. Runs on PRs + pushes to dev/main and weekly; the analyze step
+# is expected to pass and can be promoted to a required check via branch protection.
 on:
   push:
     branches:

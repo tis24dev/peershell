@@ -33,10 +33,19 @@ jobs:
           registry-url: "https://registry.npmjs.org"
 
       - name: Install
-        run: npm ci || npm install
+        run: npm ci
 
       - name: Build all
         run: npm run build:all
+
+      - name: Validate release version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          source .github/scripts/release-policy.sh
+          validate_release_tag "$RELEASE_TAG"
+          assert_versions_match_tag HEAD "$RELEASE_TAG"
 
       - name: Test + smoke
         run: |

@@ -48,7 +48,18 @@ jobs:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |
           set -euo pipefail
-          source .github/scripts/release-policy.sh
+          # Source the policy from the pre-merge main parent (MERGE_SHA^), the trusted ancestor.
+          # After merge origin/main == MERGE_SHA (the just-merged, to-be-released tree), so it is the
+          # UNtrusted tree; do NOT source from it. Bootstrap: fall back to the merged policy on the
+          # first-ever release when the parent carries no policy yet.
+          POLICY="$(mktemp)"
+          if git show "${MERGE_SHA}^:.github/scripts/release-policy.sh" > "${POLICY}" 2>/dev/null; then
+            # shellcheck source=/dev/null
+            source "${POLICY}"
+          else
+            echo "::notice::Release policy absent on previous main; bootstrap release, using merged policy."
+            source .github/scripts/release-policy.sh
+          fi
 
           HAS_RELEASE_MARKER="false"
           TAG=""
