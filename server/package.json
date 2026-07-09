@@ -1,0 +1,16 @@
+{
+  "name": "@peershell/server",
+  "version": "0.1.0-beta",
+  "private": true,
+  "description": "peershell rendezvous + blind relay + reverse HTTP tunnel (MVP; accounts/dashboard in Stage 6)",
+  "license": "Apache-2.0",
+  "main": "src/index.cjs",
+  "scripts": {
+    "start": "node src/index.cjs",
+    "build": "echo \"(server: plain CJS, no build step)\"",
+    "test": "echo \"(server: covered by shared/ + clients/tabby integration tests)\""
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

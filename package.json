@@ -1,0 +1,37 @@
+{
+  "name": "peershell",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Take your terminal anywhere and work as if it were local",
+  "license": "Apache-2.0",
+  "repository": "https://github.com/tis24dev/peershell",
+  "workspaces": [
+    "shared",
+    "clients/web",
+    "clients/tabby",
+    "server"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.1",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "eslint": "^8.57.1",
+    "typescript": "^4.9.5",
+    "ws": "^8.21.0"
+  },
+  "scripts": {
+    "build:shared": "npm run build -w @peershell/protocol",
+    "build:web": "npm run build -w @peershell/web-client",
+    "copy:web-asset": "node scripts/copy-web-asset.mjs",
+    "build:tabby": "npm run build -w tabby-peershell",
+    "build:server": "npm run build -w @peershell/server",
+    "build:all": "npm run build:shared && npm run build:web && npm run copy:web-asset && npm run build:tabby && npm run build:server",
+    "watch:tabby": "npm run watch -w tabby-peershell",
+    "test": "jest",
+    "test:smoke": "node clients/tabby/test/smoke-load.cjs",
+    "lint": "eslint . --ext .ts,.cjs,.mjs"
+  }
+}

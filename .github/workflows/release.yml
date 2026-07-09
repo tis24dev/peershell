@@ -1,0 +1,90 @@
+name: Release Asset
+
+# Fires when post-merge-release publishes a vX.Y.Z release. Builds the Tabby plugin,
+# attaches the signed artifact to the release, and publishes to npm.
+on:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-asset-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  build-publish:
+    name: build-publish
+    if: startsWith(github.event.release.tag_name, 'v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout released tag
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install
+        run: npm ci
+
+      - name: Build all
+        run: npm run build:all
+
+      - name: Validate release version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          source .github/scripts/release-policy.sh
+          validate_release_tag "$RELEASE_TAG"
+          assert_versions_match_tag HEAD "$RELEASE_TAG"
+
+      - name: Test + smoke
+        run: |
+          npm test
+          npm run test:smoke
+
+      - name: Package plugin
+        run: node scripts/package-plugin.mjs
+
+      - name: Checksums
+        run: sha256sum tabby-peershell.zip > SHA256SUMS
+
+      - name: Sign checksums (ECDSA P-256) and verify against pinned key
+        env:
+          SIGNING_KEY: ${{ secrets.PEERSHELL_KEY_SIGNATURE }}
+        run: |
+          set -euo pipefail
+          [ -n "${SIGNING_KEY}" ] || { echo "::error::PEERSHELL_KEY_SIGNATURE is empty"; exit 1; }
+          printf '%s\n' "${SIGNING_KEY}" > "${RUNNER_TEMP}/sign.key"
+          openssl dgst -sha256 -sign "${RUNNER_TEMP}/sign.key" -out SHA256SUMS.sig SHA256SUMS
+          shred -u "${RUNNER_TEMP}/sign.key" 2>/dev/null || rm -f "${RUNNER_TEMP}/sign.key"
+          # Fail-closed: the signature MUST verify against the committed public key.
+          openssl dgst -sha256 -verify .github/keys/peershell_release.pub -signature SHA256SUMS.sig SHA256SUMS
+
+      - name: Upload assets to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          gh release upload "$RELEASE_TAG" tabby-peershell.zip SHA256SUMS SHA256SUMS.sig --clobber
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PEERSHELL_NPM_TOKEN }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          DIST_TAG=latest
+          case "$RELEASE_TAG" in *-*) DIST_TAG=next ;; esac
+          npm publish -w @peershell/protocol --access public --tag "$DIST_TAG"
+          npm publish -w tabby-peershell --access public --tag "$DIST_TAG"
