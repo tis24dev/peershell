@@ -62,7 +62,9 @@ export class AccountService {
                 body: body === undefined ? undefined : JSON.stringify(body),
             })
         } catch (err) {
-            return { status: 0, error: 'network-error', detail: String(err) }
+            // eslint-disable-next-line no-console
+            console.error('[peershell] fetch failed:', method, this.base() + path, err)
+            return { status: 0, error: 'network-error', detail: String((err as any)?.message ?? err) }
         }
         let json: Record<string, unknown> = {}
         try {

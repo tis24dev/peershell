@@ -111,7 +111,9 @@ export class LoginModalComponent {
     }
 
     private fail(r: AccountApiResult): void {
-        this.error = ERRORS[String(r.error)] ?? (r.error ? String(r.error) : `Request failed (${r.status})`)
+        const base = ERRORS[String(r.error)] ?? (r.error ? String(r.error) : `Request failed (${r.status})`)
+        const detail = (r as { detail?: string }).detail
+        this.error = detail ? `${base}  ·  ${detail}` : base
     }
 
     async submitLogin(): Promise<void> {
@@ -135,6 +137,8 @@ export class LoginModalComponent {
                 return
             }
             this.fail(r)
+        } catch (e) {
+            this.error = `Unexpected error: ${String((e as { message?: string })?.message ?? e)}`
         } finally {
             this.busy = false
         }
@@ -162,6 +166,8 @@ export class LoginModalComponent {
                 return
             }
             this.fail(r)
+        } catch (e) {
+            this.error = `Unexpected error: ${String((e as { message?: string })?.message ?? e)}`
         } finally {
             this.busy = false
         }
