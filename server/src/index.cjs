@@ -535,6 +535,25 @@ function startRelay(port = 0, opts = {}) {
                 }
             }
         }
+        // Close any live host WS sessions for an account after its tokens are revoked (password
+        // reset/change): revoking a bearer only blocks FUTURE handshakes, but a socket bound its
+        // account at connect time and would otherwise keep streaming. exceptTokenHash spares the
+        // caller's current session (change-password). The socket's 'close' handler notifies the guest
+        // (peer-left) and dropRoom()s. Returns the number of sockets closed.
+        function terminateAccountSessions(accountId, exceptTokenHash) {
+            if (!accountId) {
+                return 0
+            }
+            let n = 0
+            for (const c of wss.clients) {
+                if (c._account && c._account.id === accountId && c._tokenHash !== exceptTokenHash) {
+                    c._account = null // stop any in-flight create-session on this socket
+                    try { c.close(4001, 'session revoked') } catch { /* ignore */ }
+                    n++
+                }
+            }
+            return n
+        }
         function safeSend(sock, data, binary) {
             if (sock && sock.readyState === sock.OPEN) {
                 sock.send(data, { binary: !!binary })
@@ -812,13 +831,15 @@ function startRelay(port = 0, opts = {}) {
                             acct.resetExpiresAt = null
                             acct.verified = true
                             loginFails.delete(email)
-                            // Password was reset: revoke any bearer tokens still outstanding for this account.
+                            // Password was reset: revoke any bearer tokens still outstanding for this
+                            // account and drop its live host WS sessions (the reset is a lockout).
                             for (const t of store.tokens) {
                                 if (t.accountId === acct.id && !t.revokedAt) {
                                     t.revokedAt = now()
                                 }
                             }
                             saveStore()
+                            terminateAccountSessions(acct.id)
                             return sendJson(res, 200, { ok: true })
                         }
                         recordLoginFail(email)
@@ -850,6 +871,8 @@ function startRelay(port = 0, opts = {}) {
                             }
                         }
                         saveStore()
+                        // Drop the account's OTHER live host sessions too, sparing the caller's current one.
+                        terminateAccountSessions(acct.id, curHash)
                         return sendJson(res, 200, { ok: true })
                     }
                     default:
@@ -945,12 +968,17 @@ function startRelay(port = 0, opts = {}) {
             // Account token (host) rides in the Sec-WebSocket-Protocol handshake header as
             // peershell.bearer.<base64url>. One-release fallback: the legacy ?token= query param.
             let acct = null
+            let tokenHash = null
             try {
                 const fromHeader = bearerFromProtocolHeader(req.headers['sec-websocket-protocol'])
                 const raw = fromHeader || new URL(req.url || '/', 'http://x').searchParams.get('token')
                 acct = raw ? accountFromToken(raw) : null
+                // Remember which token authorized this socket so a password change can drop the sessions
+                // whose token it revoked while keeping the caller's current one.
+                tokenHash = acct && raw ? sha256hex(raw) : null
             } catch { /* ignore */ }
             sock._account = acct
+            sock._tokenHash = tokenHash
 
             sock.on('message', (data, isBinary) => {
                 sock._lastSeen = now()

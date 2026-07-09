@@ -214,6 +214,60 @@ it('verify-email and reset-password rate-limit code brute-force (same per-email 
     }
 }, 40000)
 
+it('password reset terminates the account live host WS sessions', async () => {
+    const mails: any[] = []
+    const r2 = await server.startRelay(0, {
+        requireAuth: true, ephemeral: true,
+        email: { apiKey: 'test', from: 'noreply@test', sendFn: async (o: any) => { mails.push(o) } },
+    })
+    const base2 = r2.url.replace('ws://', 'http://')
+    const codeOf = (email: string): string => {
+        const mail = [...mails].reverse().find(m => m.to === email)
+        const m = mail && /(\d{6})/.exec(mail.text)
+        return m ? m[1] : ''
+    }
+    try {
+        const email = 'revoke-live@example.com'
+        await postTo(base2, '/register', { email, password: 'CorrectHorse9' })
+        await postTo(base2, '/verify-email', { email, code: codeOf(email) })
+        const login = await postTo(base2, '/login', { email, password: 'CorrectHorse9' })
+        const token: string = login.json.token
+        expect(typeof token).toBe('string')
+
+        // Open a live host share on that token and keep it open.
+        const b64url = Buffer.from(token).toString('base64url')
+        const ws = new WebSocket(r2.url, ['peershell.v1', 'peershell.bearer.' + b64url])
+        const created = await new Promise<any>((resolve, reject) => {
+            const to = setTimeout(() => reject(new Error('timeout')), 6000)
+            ws.on('open', () => {
+                ws.send(JSON.stringify({ v: 1, t: 'hello', role: 'host', kind: 'desktop' }))
+                ws.send(JSON.stringify({ v: 1, t: 'create-session' }))
+            })
+            ws.on('message', d => {
+                const m = JSON.parse(d.toString())
+                if (m.t === 'session-created') { clearTimeout(to); resolve(m) }
+            })
+            ws.on('error', reject)
+        })
+        expect(created.room).toBeTruthy()
+
+        const serverClosed = new Promise<boolean>(resolve => {
+            const to = setTimeout(() => resolve(false), 6000)
+            ws.on('close', () => { clearTimeout(to); resolve(true) })
+        })
+
+        // Reset the password: revokes tokens AND must drop the already-open host session.
+        await postTo(base2, '/request-password-reset', { email })
+        const rr = await postTo(base2, '/reset-password', { email, code: codeOf(email), newPassword: 'BrandNewHorse9' })
+        expect(rr.status).toBe(200)
+
+        expect(await serverClosed).toBe(true)
+        ws.close()
+    } finally {
+        await r2.close()
+    }
+}, 40000)
+
 it('WS create-session is gated: rejected without a token, accepted with one', async () => {
     const noAuth = await createSessionWs()
     expect(noAuth.t).toBe('error')
