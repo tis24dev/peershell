@@ -14,3 +14,6 @@ clients/tabby/assets/web-client.html
 # local plugin packaging artifacts (Windows install)
 build/
 tabby-peershell.zip
+
+# server runtime data (accounts store)
+server/data/
