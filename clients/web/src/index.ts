@@ -12,7 +12,11 @@ const setStatus = (s: string): void => { el('status').textContent = s }
 function getToken(): string | null {
     const m = /\/s\/([^/?#]+)/.exec(location.pathname)
     if (m) {
-        return decodeURIComponent(m[1])
+        try {
+            return decodeURIComponent(m[1])
+        } catch {
+            return null // malformed %-escape -> treat as missing token
+        }
     }
     return new URLSearchParams(location.search).get('token')
 }
@@ -73,17 +77,22 @@ async function main(): Promise<void> {
 
     let stopped = false // host ended the session (or wrong PIN / cancelled) -> do not reconnect
     let cachedPin: string | null = null
+    // True once live output has flowed (i.e. the PIN was accepted). Gates cachedPin reuse so a wrong
+    // PIN is re-prompted on the host's re-challenge instead of silently replayed until retries run out.
+    let sessionEstablished = false
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
     let reconnectDeadline = 0
     const RECONNECT_WINDOW_MS = 12000 // survive brief drops; a bit beyond the host's ~10s grace
 
     const sink: MirrorSink = {
         // Reassemble multibyte UTF-8 split across frames before writing to xterm.
-        emit: data => term.write(splitter.write(data)),
+        // Live/snapshot output only flows after pin-ok, so this marks the session as established.
+        emit: data => { sessionEstablished = true; term.write(splitter.write(data)) },
         // Adopt the host's size (tmate model); the browser window does not drive the size.
         hostResize: (cols, rows) => term.resize(cols, rows),
         ended: reason => {
             stopped = true
+            sessionEstablished = false
             if (reconnectTimer) {
                 clearTimeout(reconnectTimer)
                 reconnectTimer = null
@@ -94,7 +103,9 @@ async function main(): Promise<void> {
     }
     // Cache the PIN so a reconnect re-authenticates without re-prompting the user.
     const pinProvider: PinProvider = async () => {
-        if (cachedPin) {
+        // Only reuse the cached PIN for a genuine reconnect (session was live); on a re-challenge
+        // within the same attempt (wrong PIN) re-prompt instead of replaying the bad PIN.
+        if (sessionEstablished && cachedPin) {
             return cachedPin
         }
         cachedPin = await askPin()
