@@ -115,7 +115,14 @@ export class ShareController {
     }
 
     private async verifyResponse(hash: string): Promise<void> {
-        const ok = await verifyPin(this.pin, this.nonce, hash)
+        let ok = false
+        try {
+            ok = await verifyPin(this.pin, this.nonce, hash)
+        } catch {
+            // A verify error (e.g. crypto unavailable) counts as a failed attempt: the guest is told via
+            // pin-fail and eventually kicked, rather than left hanging on a silently un-joinable session.
+            ok = false
+        }
         if (ok) {
             this.authenticated = true
             this.transport.sendControl({ t: 'pin-ok' })
