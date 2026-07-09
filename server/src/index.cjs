@@ -238,13 +238,19 @@ th,td{border:1px solid #ccc;padding:7px;text-align:left;font-size:14px}
 </div>
 <div id="settings">
 <h3>Settings</h3><button onclick="showApp()">Back to sessions</button>
-<div style="margin:12px 0"><button onclick="stab('pw')">Change password</button> <button onclick="stab('2fa')">2FA</button></div>
+<div id="smenu" style="margin:12px 0"><p><button onclick="stab('pw')">Change password</button></p><p><button onclick="stab('2fa')">2FA</button></p></div>
 <div id="pwPanel" style="display:none">
+<p><button onclick="showMenu()">&larr; back</button></p>
+<h4>Change password</h4>
 <input id="cur" type="password" placeholder="current password" autocomplete="current-password">
 <input id="np" type="password" placeholder="new password" autocomplete="new-password">
 <div><button onclick="changePw()">Change password</button></div>
 </div>
-<div id="twoPanel" style="display:none"><div id="twofa"></div></div>
+<div id="twoPanel" style="display:none">
+<p><button onclick="showMenu()">&larr; back</button></p>
+<h4>Two-factor authentication</h4>
+<div id="twofa"></div>
+</div>
 </div>
 <script src="/qrcode.js"></script>
 <script>
@@ -275,8 +281,9 @@ function load(){api('GET','/sessions',null,true).then(function(r){if(r._s===401)
 (r.sessions||[]).forEach(function(s){var tr=document.createElement('tr');
 tr.innerHTML='<td class="'+(s.live?'live':'dead')+'">'+(s.live?'live':'ended')+'</td><td>'+fmt(s.createdAt)+'</td><td>'+fmt(s.endedAt)+'</td><td>'+(s.live?'<a href="'+s.magicLink+'" target="_blank">open</a>':'-')+'</td>';b.appendChild(tr)});
 if(!(r.sessions||[]).length)b.innerHTML='<tr><td colspan="4">No sessions yet.</td></tr>'})}
-function openSettings(){$('app').style.display='none';$('settings').style.display='block';$('pwPanel').style.display='none';$('twoPanel').style.display='none'}
-function stab(w){$('pwPanel').style.display=w==='pw'?'block':'none';$('twoPanel').style.display=w==='2fa'?'block':'none';if(w==='2fa')renderTwofa()}
+function openSettings(){$('app').style.display='none';$('settings').style.display='block';showMenu()}
+function showMenu(){$('smenu').style.display='block';$('pwPanel').style.display='none';$('twoPanel').style.display='none'}
+function stab(w){$('smenu').style.display='none';$('pwPanel').style.display=w==='pw'?'block':'none';$('twoPanel').style.display=w==='2fa'?'block':'none';if(w==='2fa')renderTwofa()}
 function showApp(){$('settings').style.display='none';$('app').style.display='block';load()}
 function changePw(){var c=$('cur').value,n=$('np').value;api('POST','/change-password',{currentPassword:c,newPassword:n},true).then(function(r){alert(r._s===200?'Password changed':(r.error==='invalid-credentials'?'Current password is wrong':(r.error==='password-too-weak'?'New password: at least 8 characters':'Error')));if(r._s===200){$('cur').value='';$('np').value=''}})}
 function renderTwofa(){$('twofa').innerHTML=TOTP?'<p>2FA is <b>enabled</b>.</p><input id="dpw" type="password" placeholder="password"><button onclick="disable2fa()">Disable 2FA</button>':'<button onclick="setup2fa()">Enable 2FA</button>'}
