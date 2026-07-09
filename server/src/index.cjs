@@ -214,7 +214,9 @@ body{font-family:system-ui,sans-serif;margin:0;color:#111;background:#fff}
 #bar.on{display:flex}
 #app{padding:16px;max-width:720px;display:none}
 #login{display:none;position:fixed;inset:0;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}
+#settings{padding:16px;max-width:720px;display:none}
 .card{width:300px;max-width:92%}
+code{background:#eee;padding:2px 6px;word-break:break-all}
 input{display:block;margin:6px 0;padding:9px;width:280px;max-width:92%;box-sizing:border-box}
 button{padding:8px 12px;margin:3px 3px 3px 0}
 #msg{color:#a00;margin-top:8px}
@@ -222,7 +224,7 @@ table{border-collapse:collapse;width:100%;margin-top:12px}
 th,td{border:1px solid #ccc;padding:7px;text-align:left;font-size:14px}
 .live{color:#0a0;font-weight:bold}.dead{color:#999}
 </style></head><body>
-<div id="bar"><span id="who"></span><button onclick="logout()">logout</button></div>
+<div id="bar"><span id="who"></span><span><button onclick="openSettings()">settings</button><button onclick="logout()">logout</button></span></div>
 <div id="login"><div class="card">
 <h3>peershell</h3>
 <input id="email" type="email" placeholder="email" autocomplete="username">
@@ -234,13 +236,22 @@ th,td{border:1px solid #ccc;padding:7px;text-align:left;font-size:14px}
 <h3>Your sessions</h3><button onclick="load()">Refresh</button>
 <table><thead><tr><th>Status</th><th>Opened</th><th>Closed</th><th>Link</th></tr></thead><tbody id="rows"></tbody></table>
 </div>
+<div id="settings">
+<h3>Settings</h3><button onclick="showApp()">Back to sessions</button>
+<h4>Change password</h4>
+<input id="cur" type="password" placeholder="current password" autocomplete="current-password">
+<input id="np" type="password" placeholder="new password" autocomplete="new-password">
+<div><button onclick="changePw()">Change password</button></div>
+<h4>Two-factor authentication</h4>
+<div id="twofa"></div>
+</div>
 <script>
-var T=localStorage.getItem('ps_token')||'',EM=localStorage.getItem('ps_email')||'';
+var T=localStorage.getItem('ps_token')||'',EM=localStorage.getItem('ps_email')||'',TOTP=false;
 function $(i){return document.getElementById(i)}
 function msg(t){$('msg').textContent=t||''}
 function api(m,p,b,a){var h={'content-type':'application/json'};if(a&&T)h.authorization='Bearer '+T;
 return fetch(p,{method:m,headers:h,body:b?JSON.stringify(b):undefined}).then(function(r){return r.json().catch(function(){return{}}).then(function(j){j._s=r.status;return j})})}
-function show(on){$('login').style.display=on?'none':'flex';$('app').style.display=on?'block':'none';$('bar').className=on?'on':'';if(on){$('who').textContent=EM;load()}}
+function show(on){$('login').style.display=on?'none':'flex';$('app').style.display=on?'block':'none';$('settings').style.display='none';$('bar').className=on?'on':'';if(on){$('who').textContent=EM;load()}}
 function save(e,t){T=t;EM=e;localStorage.setItem('ps_token',t);localStorage.setItem('ps_email',e);show(true)}
 function login(){var e=$('email').value.trim().toLowerCase(),p=$('pass').value;api('POST','/login',{email:e,password:p}).then(function(r){
 if(r.needsTotp){var c=prompt('Two-factor code:');if(!c)return;api('POST','/2fa/verify',{sessionKey:r.sessionKey,code:c}).then(function(x){x.token?save(e,x.token):msg('Invalid two-factor code')});return}
@@ -258,10 +269,17 @@ var c=prompt('Reset code (from email or the server log):');if(!c)return;var np=p
 api('POST','/reset-password',{email:e,code:c,newPassword:np}).then(function(r){msg(r._s===200?'Password changed. Log in.':'Reset failed')})})}
 function logout(){api('POST','/logout',{},true).finally(function(){T='';localStorage.removeItem('ps_token');show(false)})}
 function fmt(t){return t?new Date(t).toLocaleString():'-'}
-function load(){api('GET','/sessions',null,true).then(function(r){if(r._s===401){logout();return}var b=$('rows');b.innerHTML='';
+function load(){api('GET','/sessions',null,true).then(function(r){if(r._s===401){logout();return}if(r.account)TOTP=!!r.account.totpEnabled;var b=$('rows');b.innerHTML='';
 (r.sessions||[]).forEach(function(s){var tr=document.createElement('tr');
 tr.innerHTML='<td class="'+(s.live?'live':'dead')+'">'+(s.live?'live':'ended')+'</td><td>'+fmt(s.createdAt)+'</td><td>'+fmt(s.endedAt)+'</td><td>'+(s.live?'<a href="'+s.magicLink+'" target="_blank">open</a>':'-')+'</td>';b.appendChild(tr)});
 if(!(r.sessions||[]).length)b.innerHTML='<tr><td colspan="4">No sessions yet.</td></tr>'})}
+function openSettings(){$('app').style.display='none';$('settings').style.display='block';renderTwofa()}
+function showApp(){$('settings').style.display='none';$('app').style.display='block';load()}
+function changePw(){var c=$('cur').value,n=$('np').value;api('POST','/change-password',{currentPassword:c,newPassword:n},true).then(function(r){alert(r._s===200?'Password changed':(r.error==='invalid-credentials'?'Current password is wrong':(r.error==='password-too-weak'?'New password: at least 8 characters':'Error')));if(r._s===200){$('cur').value='';$('np').value=''}})}
+function renderTwofa(){$('twofa').innerHTML=TOTP?'<p>2FA is <b>enabled</b>.</p><input id="dpw" type="password" placeholder="password"><button onclick="disable2fa()">Disable 2FA</button>':'<button onclick="setup2fa()">Enable 2FA</button>'}
+function setup2fa(){api('POST','/2fa/setup',{},true).then(function(r){if(r._s!==200){alert('Error');return}$('twofa').innerHTML='<p>Add this key to your authenticator app, then enter the 6-digit code:</p><p><code>'+r.secret+'</code></p><p><small>'+r.otpauthUrl+'</small></p><input id="ec" placeholder="6-digit code" inputmode="numeric"><button onclick="enable2fa()">Confirm</button>'})}
+function enable2fa(){var c=($('ec').value||'').trim();api('POST','/2fa/enable',{code:c},true).then(function(r){if(r._s===200){TOTP=true;alert('2FA enabled');renderTwofa()}else alert('Invalid code')})}
+function disable2fa(){var p=$('dpw').value;api('POST','/2fa/disable',{password:p},true).then(function(r){if(r._s===200){TOTP=false;alert('2FA disabled');renderTwofa()}else alert('Wrong password')})}
 show(!!T);
 </script></body></html>`
 
@@ -711,13 +729,31 @@ function startRelay(port = 0, opts = {}) {
                         }
                         return sendJson(res, 400, { error: 'invalid' })
                     }
+                    case '/change-password': {
+                        const acct = accountFromToken(bearer(req))
+                        if (!acct) {
+                            return sendJson(res, 401, { error: 'unauthorized' })
+                        }
+                        if (!verifyPassword(acct, String(body.currentPassword || ''))) {
+                            return sendJson(res, 401, { error: 'invalid-credentials' })
+                        }
+                        const np = String(body.newPassword || '')
+                        if (np.length < MIN_PASSWORD) {
+                            return sendJson(res, 400, { error: 'password-too-weak', min: MIN_PASSWORD })
+                        }
+                        acct.pwhash = hashPassword(np)
+                        delete acct.salt
+                        delete acct.hash
+                        saveStore()
+                        return sendJson(res, 200, { ok: true })
+                    }
                     default:
                         return sendJson(res, 404, { error: 'not-found' })
                 }
             })
         }
 
-        const REST_POST = new Set(['/register', '/verify-email', '/login', '/2fa/verify', '/2fa/setup', '/2fa/enable', '/2fa/disable', '/logout', '/session/refresh', '/request-password-reset', '/reset-password'])
+        const REST_POST = new Set(['/register', '/verify-email', '/login', '/2fa/verify', '/2fa/setup', '/2fa/enable', '/2fa/disable', '/logout', '/session/refresh', '/request-password-reset', '/reset-password', '/change-password'])
 
         const server = http.createServer((req, res) => {
             const url = (req.url || '').split('?')[0]
