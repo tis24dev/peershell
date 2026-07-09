@@ -40,10 +40,10 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
 
 function genCode(n = 6) {
-    const bytes = crypto.randomBytes(n)
     let out = ''
     for (let i = 0; i < n; i++) {
-        out += CODE_ALPHABET[bytes[i] % CODE_ALPHABET.length]
+        // crypto.randomInt is unbiased (rejection sampling); avoids the modulo bias of randomBytes % len.
+        out += CODE_ALPHABET[crypto.randomInt(0, CODE_ALPHABET.length)]
     }
     return out
 }
@@ -170,7 +170,8 @@ function base32Encode(buf) {
 }
 function base32Decode(str) {
     let bits = ''
-    for (const c of String(str).toUpperCase().replace(/=+$/, '')) {
+    // No padding strip needed: non-base32 chars (incl. '=') are skipped below (idx < 0).
+    for (const c of String(str).toUpperCase()) {
         const idx = B32.indexOf(c)
         if (idx >= 0) {
             bits += idx.toString(2).padStart(5, '0')
