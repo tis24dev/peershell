@@ -110,7 +110,7 @@ export class PeershellService {
             },
             onAuthenticated: () => this.notifications.notice('peershell: guest connected'),
             onPinFailed: () => this.notifications.error('peershell: guest failed the PIN'),
-            onPeerLeft: () => this.notifications.notice('peershell: peer disconnected'),
+            onPeerLeft: () => this.stopSharing(tab, 'peershell: guest disconnected — sharing stopped'),
             onError: (code, message) => {
                 if (code === 'unauthorized') {
                     void this.account.clearLocal()
@@ -248,12 +248,12 @@ export class PeershellService {
         return await modal.result.catch(() => null)
     }
 
-    stopSharing(tab: BaseTerminalTabComponent): void {
+    stopSharing(tab: BaseTerminalTabComponent, note = 'peershell: sharing stopped'): void {
         const controller = this.shares.get(tab)
         if (controller) {
             controller.stop('stopped')
             this.shares.delete(tab)
-            this.notifications.notice('peershell: sharing stopped')
+            this.notifications.notice(note)
         }
     }
 
