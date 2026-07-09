@@ -51,7 +51,7 @@ export type ControlType = ControlMessage['t']
 
 /** Serialize a control message to a JSON string (stamps the protocol version). */
 export function encodeControl(msg: ControlMessage): string {
-    return JSON.stringify({ v: PROTOCOL_VERSION, ...msg })
+    return JSON.stringify({ ...msg, v: PROTOCOL_VERSION })
 }
 
 /** Parse a JSON control message. Throws on malformed JSON or missing `t`. */
