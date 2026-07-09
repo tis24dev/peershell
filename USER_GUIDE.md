@@ -152,6 +152,9 @@ the bottom:
 for them to come back before ending the session. A brief network blip is survived automatically — the
 browser view reconnects on its own (re‑using the PIN) — but if the guest is really gone, the share ends.
 
+**Auto‑stop if never used:** if **no guest connects within about 5 minutes** of starting a share, the
+host stops it automatically.
+
 **Link lifetime:** a magic link expires after ~15 minutes.
 
 ---
