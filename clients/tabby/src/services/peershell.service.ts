@@ -32,13 +32,23 @@ export class PeershellService {
         return tab instanceof BaseTerminalTabComponent && this.shares.has(tab)
     }
 
-    /** The focused terminal pane of the active tab (SplitTabComponent-aware), or null. */
+    /**
+     * The terminal to act on in the active tab (SplitTabComponent-aware). Prefers the focused pane, but
+     * getFocusedTab() can be null (e.g. focus moved to the toolbar), so fall back to the tab's terminals.
+     */
     private focusedTerminal(): BaseTerminalTabComponent | null {
-        let tab = this.app.activeTab
-        if (tab instanceof SplitTabComponent) {
-            tab = tab.getFocusedTab()
+        const active = this.app.activeTab
+        if (active instanceof SplitTabComponent) {
+            const focused = active.getFocusedTab()
+            if (focused instanceof BaseTerminalTabComponent) {
+                return focused
+            }
+            const terms = active.getAllTabs().filter(
+                (t): t is BaseTerminalTabComponent => t instanceof BaseTerminalTabComponent)
+            // Prefer one that is currently shared; otherwise the first terminal in the tab.
+            return terms.find(t => this.shares.has(t)) ?? terms[0] ?? null
         }
-        return tab instanceof BaseTerminalTabComponent ? tab : null
+        return active instanceof BaseTerminalTabComponent ? active : null
     }
 
     async shareActive(): Promise<void> {
