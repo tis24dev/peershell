@@ -159,3 +159,17 @@ it('closes the transport whenever the session ends', () => {
     expect(s.getEnded()).toBe('host-ended')
     expect(t.closed).not.toBeNull()
 })
+
+it('close() marks the session ended so a late control frame cannot re-fire sink.ended', () => {
+    const t = new MockTransport()
+    const s = mockSink()
+    const c = new MirrorController(t, s.sink, noPin)
+    c.join({ room: 'ABC234' })
+
+    // Tab kill (mirrorSession) calls close(); a control frame racing that must not drive sink.ended
+    // on the already-torn-down session.
+    c.close()
+    expect(t.closed).not.toBeNull()
+    t.emitControl({ t: 'peer-left', reason: 'late' })
+    expect(s.getEnded()).toBeNull()
+})

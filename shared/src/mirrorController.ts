@@ -106,6 +106,9 @@ export class MirrorController {
     }
 
     close(): void {
+        // Mark the session ended so a control frame racing the tab-kill cannot re-enter end() and drive
+        // sink.ended() on an already-torn-down guest.
+        this.endedFlag = true
         this.transport.close(1000, 'guest-closed')
     }
 }
