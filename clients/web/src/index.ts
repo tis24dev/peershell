@@ -101,7 +101,105 @@ async function main(): Promise<void> {
         return cachedPin
     }
     const controller = new MirrorController(transport, sink, pinProvider)
-    term.onData(d => controller.writeInput(encoder.encode(d)))
+
+    // --- input + mobile extra-keys bar ---
+    const sendSeq = (s: string): void => controller.writeInput(encoder.encode(s))
+    let ctrlArmed = false
+    let altArmed = false
+    const updateMods = (): void => {
+        document.querySelectorAll<HTMLElement>('#keybar button[data-mod]').forEach(b => {
+            const on = (b.dataset.mod === 'ctrl' && ctrlArmed) || (b.dataset.mod === 'alt' && altArmed)
+            b.classList.toggle('armed', on)
+        })
+    }
+    // Type input (soft keyboard or a literal key button), applying an armed modifier to the first char
+    // (Ctrl -> control char, Alt -> ESC prefix), then disarm.
+    const typed = (data: string): void => {
+        if (!ctrlArmed && !altArmed) {
+            sendSeq(data)
+            return
+        }
+        let first = data[0] ?? ''
+        if (ctrlArmed && first) {
+            const u = first.toUpperCase().charCodeAt(0)
+            if (u >= 0x40 && u <= 0x5f) {
+                first = String.fromCharCode(u & 0x1f)
+            }
+        }
+        if (altArmed && first) {
+            first = `\x1b${first}`
+        }
+        ctrlArmed = false
+        altArmed = false
+        updateMods()
+        sendSeq(first + data.slice(1))
+    }
+    // Cursor keys respect DECCKM (application mode sends ESC O x instead of ESC [ x).
+    const ck = (c: string): string => `${term.modes.applicationCursorKeysMode ? '\x1bO' : '\x1b['}${c}`
+    const keySeq = (k: string): string | undefined => ({
+        esc: '\x1b', tab: '\t', cc: '\x03',
+        up: ck('A'), down: ck('B'), right: ck('C'), left: ck('D'),
+        home: '\x1b[H', end: '\x1b[F', pgup: '\x1b[5~', pgdn: '\x1b[6~',
+    } as Record<string, string>)[k]
+
+    term.onData(typed)
+
+    const keybar = el('keybar')
+    keybar.addEventListener('pointerdown', (e: Event) => {
+        const btn = (e.target as HTMLElement).closest('button') as HTMLButtonElement | null
+        if (!btn) {
+            return
+        }
+        e.preventDefault() // keep the terminal focused so the soft keyboard stays open
+        const { k, mod, lit } = btn.dataset
+        if (mod === 'ctrl') {
+            ctrlArmed = !ctrlArmed
+            updateMods()
+        } else if (mod === 'alt') {
+            altArmed = !altArmed
+            updateMods()
+        } else if (lit !== undefined) {
+            typed(lit)
+        } else if (k) {
+            const seq = keySeq(k)
+            if (seq !== undefined) {
+                sendSeq(seq)
+            }
+        }
+        term.focus()
+    })
+
+    // Keep the terminal sized above the bar and above the on-screen keyboard (VisualViewport).
+    const toggle = el('kbtoggle')
+    const termEl = el('terminal')
+    const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+    let barVisible = isTouch
+    keybar.classList.toggle('hidden', !barVisible)
+    const layout = (): void => {
+        const vv = window.visualViewport
+        const kb = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0
+        const barH = barVisible ? keybar.offsetHeight : 0
+        keybar.style.bottom = `${kb}px`
+        termEl.style.bottom = `${kb + barH}px`
+        fit.fit()
+    }
+    toggle.addEventListener('click', () => {
+        barVisible = !barVisible
+        keybar.classList.toggle('hidden', !barVisible)
+        layout()
+    })
+    window.visualViewport?.addEventListener('resize', layout)
+    window.visualViewport?.addEventListener('scroll', layout)
+    setTimeout(layout, 50)
+
+    // Reduce mobile IME weirdness (predictive text / autocapitalize) on the xterm input.
+    const helper = document.querySelector('.xterm-helper-textarea')
+    if (helper) {
+        helper.setAttribute('autocorrect', 'off')
+        helper.setAttribute('autocapitalize', 'off')
+        helper.setAttribute('autocomplete', 'off')
+        helper.setAttribute('spellcheck', 'false')
+    }
 
     const connectAndJoin = async (): Promise<void> => {
         await transport.connect(wsUrl(), token)

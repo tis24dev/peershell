@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>peershell</title>
   <style>
     html, body { margin: 0; height: 100%; background: #000; color: #ccd; font-family: system-ui, sans-serif; }
-    #terminal { position: absolute; inset: 0; }
+    #terminal { position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
     #status { position: absolute; top: 8px; left: 10px; z-index: 5; font-size: 13px; color: #8a95a5; }
     #overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.88); z-index: 10; }
     #overlay.hidden { display: none; }
@@ -14,11 +14,52 @@
     #overlay .title { font-size: 15px; margin-bottom: 4px; }
     #overlay input { width: 100%; padding: 9px; margin: 10px 0; box-sizing: border-box; background: #000; color: #fff; border: 1px solid #333; border-radius: 5px; font-size: 15px; letter-spacing: 3px; }
     #overlay button { padding: 9px 16px; background: #33c07a; color: #001; border: 0; border-radius: 5px; cursor: pointer; font-weight: 600; }
+
+    /* Mobile extra-keys bar */
+    #keybar {
+      position: absolute; left: 0; right: 0; bottom: 0; z-index: 8;
+      display: flex; gap: 5px; padding: 5px 6px; box-sizing: border-box;
+      overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch;
+      background: #14161b; border-top: 1px solid #2a2f39;
+    }
+    #keybar.hidden { display: none; }
+    #keybar button {
+      flex: 0 0 auto; min-width: 40px; height: 34px; padding: 0 10px;
+      background: #232833; color: #dfe6ef; border: 1px solid #333b47; border-radius: 6px;
+      font-size: 13px; font-family: ui-monospace, monospace; touch-action: manipulation;
+    }
+    #keybar button:active { background: #2f3644; }
+    #keybar button.armed { background: #33c07a; color: #001; border-color: #33c07a; }
+    #kbtoggle {
+      position: absolute; top: 6px; right: 8px; z-index: 9;
+      width: 34px; height: 30px; background: #232833cc; color: #dfe6ef;
+      border: 1px solid #333b47; border-radius: 6px; font-size: 15px; touch-action: manipulation;
+    }
   </style>
 </head>
 <body>
   <div id="terminal"></div>
   <div id="status">connecting…</div>
+  <button id="kbtoggle" title="Toggle keys">⌨</button>
+  <div id="keybar">
+    <button data-k="esc">Esc</button>
+    <button data-k="tab">Tab</button>
+    <button data-mod="ctrl">Ctrl</button>
+    <button data-mod="alt">Alt</button>
+    <button data-k="left">←</button>
+    <button data-k="down">↓</button>
+    <button data-k="up">↑</button>
+    <button data-k="right">→</button>
+    <button data-k="cc">^C</button>
+    <button data-k="home">Home</button>
+    <button data-k="end">End</button>
+    <button data-k="pgup">PgUp</button>
+    <button data-k="pgdn">PgDn</button>
+    <button data-lit="|">|</button>
+    <button data-lit="/">/</button>
+    <button data-lit="-">-</button>
+    <button data-lit="~">~</button>
+  </div>
   <div id="overlay" class="hidden">
     <div class="box">
       <div class="title">Enter session PIN</div>
