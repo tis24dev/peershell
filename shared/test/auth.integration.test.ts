@@ -129,6 +129,58 @@ it('login failures are generic (no email enumeration) and rate-limited', async (
     expect(last.json.error).toBe('rate-limited')
 }, 30000)
 
+it('verify-email and reset-password rate-limit code brute-force (same per-email lockout as login)', async () => {
+    // Isolated relay: the extra registrations + lockouts must not touch the shared server's per-IP
+    // registration budget or rate-limiter state that later tests rely on.
+    const mails: any[] = []
+    const r2 = await server.startRelay(0, {
+        requireAuth: true, ephemeral: true,
+        email: { apiKey: 'test', from: 'noreply@test', sendFn: async (o: any) => { mails.push(o) } },
+    })
+    const base2 = r2.url.replace('ws://', 'http://')
+    const post = (path: string, body: any): Promise<{ status: number, json: any }> => new Promise((resolve, reject) => {
+        const data = Buffer.from(JSON.stringify(body))
+        const u = new URL(base2 + path)
+        const req = http.request({ hostname: u.hostname, port: u.port, path: u.pathname, method: 'POST', headers: { 'content-type': 'application/json', 'content-length': data.length } }, res => {
+            let b = ''
+            res.setEncoding('utf-8')
+            res.on('data', c => { b += c })
+            res.on('end', () => { try { resolve({ status: res.statusCode ?? 0, json: JSON.parse(b || '{}') }) } catch { resolve({ status: res.statusCode ?? 0, json: {} }) } })
+        })
+        req.on('error', reject)
+        req.write(data)
+        req.end()
+    })
+    const codeOf = (email: string): string => {
+        const mail = [...mails].reverse().find(m => m.to === email)
+        const m = mail && /(\d{6})/.exec(mail.text)
+        return m ? m[1] : ''
+    }
+    try {
+        // verify-email: a 6-digit code must not be brute-forceable, so wrong codes trip the limiter.
+        const ve = 'brute-verify@example.com'
+        expect((await post('/register', { email: ve, password: 'CorrectHorse9' })).status).toBe(200)
+        let v = await post('/verify-email', { email: ve, code: '000000' })
+        expect(v.status).toBe(400)
+        for (let i = 0; i < 6; i++) { v = await post('/verify-email', { email: ve, code: '000000' }) }
+        expect(v.status).toBe(429)
+        expect(v.json.error).toBe('rate-limited')
+
+        // reset-password: same protection on its 6-digit code (expiry window alone is not enough).
+        const rp = 'brute-reset@example.com'
+        await post('/register', { email: rp, password: 'CorrectHorse9' })
+        await post('/verify-email', { email: rp, code: codeOf(rp) })
+        await post('/request-password-reset', { email: rp })
+        let r = await post('/reset-password', { email: rp, code: '000000', newPassword: 'BrandNewHorse9' })
+        expect(r.status).toBe(400)
+        for (let i = 0; i < 6; i++) { r = await post('/reset-password', { email: rp, code: '000000', newPassword: 'BrandNewHorse9' }) }
+        expect(r.status).toBe(429)
+        expect(r.json.error).toBe('rate-limited')
+    } finally {
+        await r2.close()
+    }
+}, 40000)
+
 it('WS create-session is gated: rejected without a token, accepted with one', async () => {
     const noAuth = await createSessionWs()
     expect(noAuth.t).toBe('error')

@@ -24,10 +24,15 @@ export function generateNonce(byteLength = 16): string {
 
 /** A random numeric PIN (default 6 digits) for a share. Kept local; never sent in cleartext. */
 export function generatePin(digits = 6): string {
+    // Rejection sampling: reject the top slice of the 2^32 range that does not divide evenly by
+    // `max`, so every PIN is equiprobable (plain `% max` would bias the low codes).
+    const max = 10 ** digits
+    const limit = Math.floor(0x100000000 / max) * max
     const arr = new Uint32Array(1)
-    globalThis.crypto.getRandomValues(arr)
-    const n = arr[0] % (10 ** digits)
-    return n.toString().padStart(digits, '0')
+    do {
+        globalThis.crypto.getRandomValues(arr)
+    } while (arr[0] >= limit)
+    return (arr[0] % max).toString().padStart(digits, '0')
 }
 
 /** `H(pin, nonce)` as a hex string (SHA-256 over `nonce:pin`). */

@@ -580,15 +580,23 @@ function startRelay(port = 0, opts = {}) {
                     case '/verify-email': {
                         const email = String(body.email || '').toLowerCase().trim()
                         const code = String(body.code || '')
+                        // Rate-limit code guessing (6-digit code = 10^6 space): same per-email lockout as /login.
+                        const lockUntil = loginLockedUntil(email)
+                        if (lockUntil) {
+                            return sendJson(res, 429, { error: 'rate-limited', retryAfter: Math.ceil((lockUntil - now()) / 1000) })
+                        }
                         const acct = findAccount(email)
                         if (acct && !acct.verified && acct.verifyCode &&
                             code.length === acct.verifyCode.length &&
                             crypto.timingSafeEqual(Buffer.from(code), Buffer.from(acct.verifyCode))) {
                             acct.verified = true
                             acct.verifyCode = null
+                            loginFails.delete(email)
                             saveStore()
                             return sendJson(res, 200, { ok: true })
                         }
+                        recordLoginFail(email)
+                        await failDelay()
                         return sendJson(res, 400, { error: 'invalid' })
                     }
                     case '/login': {
@@ -609,7 +617,7 @@ function startRelay(port = 0, opts = {}) {
                             return sendJson(res, 403, { error: 'needs-verification' })
                         }
                         loginFails.delete(email)
-                        if (!acct.pwhash) { // upgrade a legacy pbkdf2 hash to scrypt on login
+                        if (typeof acct.pwhash !== 'string' || !acct.pwhash.startsWith('scrypt$')) { // upgrade a legacy pbkdf2 hash to scrypt on login
                             acct.pwhash = hashPassword(password)
                             delete acct.salt
                             delete acct.hash
@@ -734,6 +742,11 @@ function startRelay(port = 0, opts = {}) {
                         if (newPassword.length < MIN_PASSWORD) {
                             return sendJson(res, 400, { error: 'password-too-weak', min: MIN_PASSWORD })
                         }
+                        // Rate-limit code guessing (6-digit code = 10^6 space): same per-email lockout as /login.
+                        const lockUntil = loginLockedUntil(email)
+                        if (lockUntil) {
+                            return sendJson(res, 429, { error: 'rate-limited', retryAfter: Math.ceil((lockUntil - now()) / 1000) })
+                        }
                         const acct = findAccount(email)
                         if (acct && acct.resetCode && acct.resetExpiresAt > now() &&
                             code.length === acct.resetCode.length &&
@@ -744,9 +757,12 @@ function startRelay(port = 0, opts = {}) {
                             acct.resetCode = null
                             acct.resetExpiresAt = null
                             acct.verified = true
+                            loginFails.delete(email)
                             saveStore()
                             return sendJson(res, 200, { ok: true })
                         }
+                        recordLoginFail(email)
+                        await failDelay()
                         return sendJson(res, 400, { error: 'invalid' })
                     }
                     case '/change-password': {
