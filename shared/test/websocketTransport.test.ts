@@ -99,3 +99,34 @@ it('rejects connect() if the handshake times out (does not hang)', async () => {
     await expect(p).rejects.toThrow(/timed out/)
     expect(last.closed).toBe(true)
 })
+
+it('ignores late events from a socket superseded by a reconnect', async () => {
+    jest.useFakeTimers()
+    const transport = new WebSocketTransport(WS)
+    const states: string[] = []
+    const controls: string[] = []
+    transport.onState(s => states.push(s))
+    transport.onControl(m => controls.push(m.t))
+
+    // First connection opens, then the socket drops.
+    const p1 = transport.connect('ws://x')
+    const first = last
+    first.onopen?.(null)
+    await p1
+    const staleClose = first.onclose // capture before the reconnect detaches it
+    const staleMsg = first.onmessage
+    first.onclose?.(null)
+
+    // Reconnect on the SAME transport: a brand-new socket supersedes the first.
+    const p2 = transport.connect('ws://x')
+    expect(last).not.toBe(first)
+    last.onopen?.(null)
+    await p2
+
+    const stateCount = states.length
+    // A late close/message from the OLD socket must not drive the new transport.
+    staleClose?.(null)
+    staleMsg?.({ data: encodeControl({ t: 'pin-ok' }) })
+    expect(states.length).toBe(stateCount)
+    expect(controls).toEqual([])
+})

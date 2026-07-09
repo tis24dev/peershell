@@ -60,6 +60,10 @@ export class WebSocketTransport implements SessionTransport {
 
     connect(url: string, token?: string): Promise<void> {
         return new Promise<void>((resolve, reject) => {
+            // Sever any previous socket from this transport before attaching a new one. The web guest
+            // reuses one transport across reconnects, so an old ws's handlers still close over `this`
+            // and would otherwise keep driving setState()/dispatch() from a superseded socket.
+            this.teardownSocket()
             this.setState('connecting')
             // The credential rides in the Sec-WebSocket-Protocol handshake header (base64url), NOT the URL
             // query, so it never lands in reverse-proxy/access logs. The server echoes only AUTH_SENTINEL.
@@ -74,8 +78,8 @@ export class WebSocketTransport implements SessionTransport {
             }
             ws.binaryType = 'arraybuffer'
             this.ws = ws
-            // Settle the connect promise exactly once. Without this guard a close/error arriving before
-            // open (or a silent hang) would leave connect() pending forever.
+            // Settle the connect promise exactly once. The `current()` identity guard additionally ignores
+            // any late event from a socket a newer connect() has already superseded (stale onclose/onmessage).
             let settled = false
             let timer: ReturnType<typeof setTimeout> | null = null
             const clear = (): void => {
@@ -84,8 +88,9 @@ export class WebSocketTransport implements SessionTransport {
                     timer = null
                 }
             }
+            const current = (): boolean => this.ws === ws
             ws.onopen = () => {
-                if (settled) {
+                if (settled || !current()) {
                     return
                 }
                 settled = true
@@ -95,7 +100,7 @@ export class WebSocketTransport implements SessionTransport {
                 resolve()
             }
             ws.onerror = () => {
-                if (settled) {
+                if (settled || !current()) {
                     return
                 }
                 settled = true
@@ -104,6 +109,9 @@ export class WebSocketTransport implements SessionTransport {
                 reject(new Error('peershell: WebSocket connection failed'))
             }
             ws.onclose = () => {
+                if (!current()) {
+                    return // a superseded socket closing: it no longer owns this transport
+                }
                 if (!settled) {
                     settled = true
                     clear()
@@ -114,16 +122,20 @@ export class WebSocketTransport implements SessionTransport {
                     this.setState('closed')
                 }
             }
-            ws.onmessage = ev => this.dispatch(ev.data)
+            ws.onmessage = ev => {
+                if (current()) {
+                    this.dispatch(ev.data)
+                }
+            }
             timer = setTimeout(() => {
-                if (settled) {
+                if (settled || !current()) {
                     return
                 }
                 settled = true
                 timer = null
-                try {
-                    ws.close()
-                } catch { /* ignore */ }
+                // Detach + close the stalled socket first (teardownSocket clears onclose before close()),
+                // so its close cannot re-enter here; then report the single 'closed' transition.
+                this.teardownSocket()
                 this.setState('closed')
                 reject(new Error('peershell: WebSocket connect timed out'))
             }, CONNECT_TIMEOUT_MS)
@@ -133,6 +145,23 @@ export class WebSocketTransport implements SessionTransport {
                 t.unref()
             }
         })
+    }
+
+    /** Detach a socket's handlers and close it so it can no longer drive this transport's state. */
+    private teardownSocket(): void {
+        this.stopKeepalive()
+        const ws = this.ws
+        if (!ws) {
+            return
+        }
+        this.ws = null
+        ws.onopen = null
+        ws.onmessage = null
+        ws.onclose = null
+        ws.onerror = null
+        try {
+            ws.close()
+        } catch { /* already closing/closed */ }
     }
 
     private dispatch(data: unknown): void {
