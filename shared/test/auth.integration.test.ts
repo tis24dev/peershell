@@ -52,6 +52,26 @@ function api(method: string, path: string, body?: any, token?: string): Promise<
     })
 }
 
+/** POST JSON to an arbitrary relay base (isolated-relay tests reuse this instead of copying it). */
+function postTo(base: string, path: string, body: any): Promise<{ status: number, json: any }> {
+    return new Promise((resolve, reject) => {
+        const data = Buffer.from(JSON.stringify(body))
+        const u = new URL(base + path)
+        const req = http.request({
+            hostname: u.hostname, port: u.port, path: u.pathname, method: 'POST',
+            headers: { 'content-type': 'application/json', 'content-length': data.length },
+        }, res => {
+            let b = ''
+            res.setEncoding('utf-8')
+            res.on('data', c => { b += c })
+            res.on('end', () => { try { resolve({ status: res.statusCode ?? 0, json: JSON.parse(b || '{}') }) } catch { resolve({ status: res.statusCode ?? 0, json: {} }) } })
+        })
+        req.on('error', reject)
+        req.write(data)
+        req.end()
+    })
+}
+
 const codeFor = (email: string): string => {
     const mail = [...sent].reverse().find(m => m.to === email)
     const m = mail && /(\d{6})/.exec(mail.text)
@@ -163,19 +183,7 @@ it('verify-email and reset-password rate-limit code brute-force (same per-email 
         email: { apiKey: 'test', from: 'noreply@test', sendFn: async (o: any) => { mails.push(o) } },
     })
     const base2 = r2.url.replace('ws://', 'http://')
-    const post = (path: string, body: any): Promise<{ status: number, json: any }> => new Promise((resolve, reject) => {
-        const data = Buffer.from(JSON.stringify(body))
-        const u = new URL(base2 + path)
-        const req = http.request({ hostname: u.hostname, port: u.port, path: u.pathname, method: 'POST', headers: { 'content-type': 'application/json', 'content-length': data.length } }, res => {
-            let b = ''
-            res.setEncoding('utf-8')
-            res.on('data', c => { b += c })
-            res.on('end', () => { try { resolve({ status: res.statusCode ?? 0, json: JSON.parse(b || '{}') }) } catch { resolve({ status: res.statusCode ?? 0, json: {} }) } })
-        })
-        req.on('error', reject)
-        req.write(data)
-        req.end()
-    })
+    const post = (path: string, body: any): Promise<{ status: number, json: any }> => postTo(base2, path, body)
     const codeOf = (email: string): string => {
         const mail = [...mails].reverse().find(m => m.to === email)
         const m = mail && /(\d{6})/.exec(mail.text)
@@ -266,18 +274,7 @@ it('optional TOTP: setup -> enable -> login needs 2FA -> verify issues token', a
 it('auto-verifies and returns a token when no email is configured', async () => {
     const r2 = await server.startRelay(0, { requireAuth: true, ephemeral: true }) // no email cfg -> log path
     const base2 = r2.url.replace('ws://', 'http://')
-    const post = (path: string, body: any): Promise<{ status: number, json: any }> => new Promise((resolve, reject) => {
-        const data = Buffer.from(JSON.stringify(body))
-        const u = new URL(base2 + path)
-        const req = http.request({ hostname: u.hostname, port: u.port, path: u.pathname, method: 'POST', headers: { 'content-type': 'application/json', 'content-length': data.length } }, res => {
-            let b = ''
-            res.on('data', c => { b += c })
-            res.on('end', () => resolve({ status: res.statusCode ?? 0, json: JSON.parse(b || '{}') }))
-        })
-        req.on('error', reject)
-        req.write(data)
-        req.end()
-    })
+    const post = (path: string, body: any): Promise<{ status: number, json: any }> => postTo(base2, path, body)
     const r = await post('/register', { email: 'noemail@example.com', password: 'CorrectHorse9' })
     expect(r.status).toBe(200)
     expect(typeof r.json.token).toBe('string')
