@@ -3,14 +3,14 @@
 > Take your terminal anywhere and work as if it were local.
 
 Share one live terminal session with remote peers and let them see the exact screen and type as if
-local — from another **Tabby** (via the `tabby-peershell` plugin), from a **browser** (via a magic-link),
+local: from another **Tabby** (via the `tabby-peershell` plugin), from a **browser** (via a magic-link),
 and, in future, from a dedicated **mobile app** or **our own terminal**. Same wire protocol everywhere.
 
 It is the `tmate` / VS Code Live Share model, brokered by a lightweight rendezvous server: the host opens
 a single **outbound** connection (no inbound ports, no NAT), the server pairs peers and blindly relays
 frames, and it reverse-tunnels the web page from the host. See [`PROTOCOL.md`](./PROTOCOL.md).
 
-## Security — read this first
+## Security: read this first
 
 **The MVP has NO end-to-end encryption.** The relay server sees every byte of the terminal in cleartext:
 typed commands, output, environment variables, secrets, keys. **Do not use it for sensitive data unless
@@ -21,10 +21,10 @@ planned behind the same transport interface.
 ## Monorepo layout (npm workspaces)
 
 ```
-shared/          @peershell/protocol — TS-only, framework-neutral wire protocol (published to npm)
-clients/tabby/   tabby-peershell     — the Tabby plugin (Angular/Electron); all Tabby-specific code
-clients/web/     @peershell/web-client — standalone browser client (xterm.js), embedded + served by host
-server/          @peershell/server   — rendezvous + relay + tunnel + accounts (register/login/2FA)
+shared/          @peershell/protocol - TS-only, framework-neutral wire protocol (published to npm)
+clients/tabby/   tabby-peershell - the Tabby plugin (Angular/Electron); all Tabby-specific code
+clients/web/     @peershell/web-client - standalone browser client (xterm.js), embedded + served by host
+server/          @peershell/server - rendezvous + relay + tunnel + accounts (register/login/2FA)
 ```
 
 > This repo uses **npm workspaces** (npm >= 9). It is independent of Tabby's package manager: the plugin

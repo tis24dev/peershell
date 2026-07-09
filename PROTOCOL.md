@@ -1,4 +1,4 @@
-# peershell wire protocol (v1 — draft, frozen at Stage 5)
+# peershell wire protocol (v1 draft, frozen at Stage 5)
 
 Language-neutral spec of the peershell wire protocol. Implemented once in `@peershell/protocol`
 (`shared/`) and consumed by every client (Tabby plugin, web-client, future native terminal, future
@@ -20,8 +20,8 @@ sits behind a `SessionTransport` interface so a future WebRTC DataChannel can re
 
 One WebSocket carries two frame kinds (`ws.binaryType = 'arraybuffer'`):
 
-- **TEXT frame = JSON control message** — the envelope below.
-- **BINARY frame = terminal data** — layout:
+- **TEXT frame = JSON control message**: the envelope below.
+- **BINARY frame = terminal data**: layout:
 
   ```
   [ peerId: uint32 big-endian ][ tag: uint8 ][ raw PTY bytes ... ]
@@ -51,7 +51,7 @@ One WebSocket carries two frame kinds (`ws.binaryType = 'arraybuffer'`):
 ### Signaling (client <-> server, WS TEXT)
 - `hello { role: "host"|"guest", kind?: "desktop"|"web"|"mobile", client }`
 - `create-session { }` (host, authenticated) -> `session-created { room, magicLink }`
-- `session-close { }` (host) — revokes the magic-link
+- `session-close { }` (host): revokes the magic-link
 - `join { room?|token?, name? }` (guest)
 - `peer-joined { peerId, kind }` (to host)
 - `peer-left { peerId, reason }`
@@ -59,20 +59,20 @@ One WebSocket carries two frame kinds (`ws.binaryType = 'arraybuffer'`):
 - `ping {}` / `pong {}`
 
 ### PIN auth (host <-> peer, relayed; gates every incoming connection)
-- `pin-challenge { nonce }`  — host sends a **fresh, single-use** nonce per attempt
-- `pin-response { hash }`     — `hash = H(pin, nonce)` (e.g. SHA-256); raw PIN never sent
-- `pin-ok {}` / `pin-fail { left }` — host verifies locally; rate-limited (~5 tries), then kick
+- `pin-challenge { nonce }`: host sends a **fresh, single-use** nonce per attempt
+- `pin-response { hash }`: `hash = H(pin, nonce)` (e.g. SHA-256); raw PIN never sent
+- `pin-ok {}` / `pin-fail { left }`: host verifies locally; rate-limited (~5 tries), then kick
 
 ### Sync (after pin-ok, relayed)
-- `snapshot { cols, rows, data }` — `data` = base64 of the host's `frontend.saveState()` VT snapshot
-- `snapshot-ack {}` — guest confirms it rendered the snapshot; **barrier**: host starts streaming
+- `snapshot { cols, rows, data }`: `data` = base64 of the host's `frontend.saveState()` VT snapshot
+- `snapshot-ack {}`: guest confirms it rendered the snapshot; **barrier**: host starts streaming
   `output` only after receiving the ack (avoids output-before-snapshot race)
-- `resize { cols, rows }` — host -> guest only (tmate model; guest never resizes the host PTY)
+- `resize { cols, rows }`: host -> guest only (tmate model; guest never resizes the host PTY)
 
 ### Terminal data (after pin-ok + snapshot-ack)
 - BINARY tag `0x01` output (host -> guest), `0x02` input (guest -> host). See Framing.
 
-### HTTP tunnel (server <-> host — serves the web-client page over the host's outbound leg)
+### HTTP tunnel (server <-> host, serves the web-client page over the host's outbound leg)
 - `http-get { peerId, reqId, path, headers }`
 - `http-response { peerId, reqId, status, headers, bodyBase64 }`
 - Correlation key = `(peerId, reqId)`. NOT real HTTP: these are application frames over the WS; the
@@ -83,13 +83,13 @@ One WebSocket carries two frame kinds (`ws.binaryType = 'arraybuffer'`):
 ## Tokens, PIN, keepalive
 
 - **magic-link token**: opaque, CSPRNG, **TTL 15 min** (default, configurable), **single-use = revoked
-  after a join completes (post `pin-ok`)** — not on first GET. Expired join -> `error{code:"link-expired",
+  after a join completes (post `pin-ok`)**, not on first GET. Expired join -> `error{code:"link-expired",
   suggestRenew:true}`. Host can revoke anytime.
 - **room-code** (if shown): Crockford base32 minus ambiguous chars; client validates `^[2-9A-HJ-NP-Z]{6,10}$`.
 - **PIN**: per-session, local only, min 6 digits (8+ recommended for hostile environments). Verified via
   `H(pin, nonce)` challenge-response. A hostile relay sees `nonce`+`hash` and can brute-force short PINs
-  **offline** — hence entropy + rate-limit; a future PAKE (SPAKE2) removes this if the relay is untrusted.
-- **keepalive**: `ping` every 20s from both ends; `ping`/`pong` do **not** reset the liveness timer — only
+  **offline**, hence entropy + rate-limit; a future PAKE (SPAKE2) removes this if the relay is untrusted.
+- **keepalive**: `ping` every 20s from both ends; `ping`/`pong` do **not** reset the liveness timer, only
   real frames (control/snapshot/output/input) do. No real frame for 60s -> close + `peer-left`.
 
 ## Security note (MVP)

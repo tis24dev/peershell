@@ -2,7 +2,7 @@
   "name": "@peershell/web-client",
   "version": "0.1.0-beta",
   "private": true,
-  "description": "peershell standalone browser client (xterm.js) — served by the host over the tunnel",
+  "description": "peershell standalone browser client (xterm.js), served by the host over the tunnel",
   "license": "Apache-2.0",
   "scripts": {
     "build": "webpack --config ./webpack.config.mjs",

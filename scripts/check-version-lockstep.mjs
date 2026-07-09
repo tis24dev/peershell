@@ -13,7 +13,7 @@ const versions = pkgs.map(p => [p, JSON.parse(readFileSync(p, 'utf8')).version])
 const distinct = [...new Set(versions.map(([, v]) => v))]
 
 if (distinct.length !== 1) {
-    console.error('Version lockstep FAILED — workspaces disagree:')
+    console.error('Version lockstep FAILED, workspaces disagree:')
     for (const [p, v] of versions) {
         console.error(`  ${p} = ${v}`)
     }
