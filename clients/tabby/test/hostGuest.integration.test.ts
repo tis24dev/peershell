@@ -77,8 +77,11 @@ it('PIN handshake, then mirrors snapshot + live output host->guest and input gue
     await host.start(relay.url)
 
     const pump = setInterval(() => output$.next(enc('LIVE\r\n')), 15)
-    await waitFor(() => sawLive)
-    clearInterval(pump)
+    try {
+        await waitFor(() => sawLive)
+    } finally {
+        clearInterval(pump)
+    }
 
     guest.writeInput(enc('typed-by-guest\n'))
     await waitFor(() => inputs.some(i => dec(i).includes('typed-by-guest')))
