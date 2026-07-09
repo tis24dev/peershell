@@ -188,8 +188,9 @@ const DASHBOARD_HTML = `<!doctype html><html lang="en"><head><meta charset="utf-
 body{font-family:system-ui,sans-serif;margin:0;color:#111;background:#fff}
 #bar{display:none;background:#111;color:#fff;padding:10px 14px;align-items:center;justify-content:space-between}
 #bar.on{display:flex}
-#login,#app{padding:16px;max-width:720px}
-#app{display:none}
+#app{padding:16px;max-width:720px;display:none}
+#login{display:none;position:fixed;inset:0;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}
+.card{width:300px;max-width:92%}
 input{display:block;margin:6px 0;padding:9px;width:280px;max-width:92%;box-sizing:border-box}
 button{padding:8px 12px;margin:3px 3px 3px 0}
 #msg{color:#a00;margin-top:8px}
@@ -198,13 +199,13 @@ th,td{border:1px solid #ccc;padding:7px;text-align:left;font-size:14px}
 .live{color:#0a0;font-weight:bold}.dead{color:#999}
 </style></head><body>
 <div id="bar"><span id="who"></span><button onclick="logout()">logout</button></div>
-<div id="login">
+<div id="login"><div class="card">
 <h3>peershell</h3>
 <input id="email" type="email" placeholder="email" autocomplete="username">
 <input id="pass" type="password" placeholder="password" autocomplete="current-password">
 <div><button onclick="login()">entra</button><button onclick="register()">registra</button><button onclick="recover()">recupera password</button></div>
 <div id="msg"></div>
-</div>
+</div></div>
 <div id="app">
 <h3>Le tue sessioni</h3><button onclick="load()">aggiorna</button>
 <table><thead><tr><th>Stato</th><th>Aperta</th><th>Chiusa</th><th>Link</th></tr></thead><tbody id="rows"></tbody></table>
@@ -215,7 +216,7 @@ function $(i){return document.getElementById(i)}
 function msg(t){$('msg').textContent=t||''}
 function api(m,p,b,a){var h={'content-type':'application/json'};if(a&&T)h.authorization='Bearer '+T;
 return fetch(p,{method:m,headers:h,body:b?JSON.stringify(b):undefined}).then(function(r){return r.json().catch(function(){return{}}).then(function(j){j._s=r.status;return j})})}
-function show(on){$('login').style.display=on?'none':'block';$('app').style.display=on?'block':'none';$('bar').className=on?'on':'';if(on){$('who').textContent=EM;load()}}
+function show(on){$('login').style.display=on?'none':'flex';$('app').style.display=on?'block':'none';$('bar').className=on?'on':'';if(on){$('who').textContent=EM;load()}}
 function save(e,t){T=t;EM=e;localStorage.setItem('ps_token',t);localStorage.setItem('ps_email',e);show(true)}
 function login(){var e=$('email').value.trim().toLowerCase(),p=$('pass').value;api('POST','/login',{email:e,password:p}).then(function(r){
 if(r.needsTotp){var c=prompt('Codice 2FA:');if(!c)return;api('POST','/2fa/verify',{sessionKey:r.sessionKey,code:c}).then(function(x){x.token?save(e,x.token):msg('2FA non valido')});return}
