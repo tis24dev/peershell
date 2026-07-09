@@ -44,9 +44,9 @@ One WebSocket carries two frame kinds (`ws.binaryType = 'arraybuffer'`):
 
 ### REST (client -> server, not WebSocket)
 - `POST /register { email, password }`
-- `POST /login { email, password } -> { token } | { needs2fa: true, challenge }`
-- `POST /2fa/verify { challenge, code } -> { token }`
-- `GET /sessions -> { sessions: [{ room, magicLink, createdAt }] }`  (dashboard, authenticated)
+- `POST /login { email, password } -> { token, expiresAt } | { needsTotp: true, sessionKey }`
+- `POST /2fa/verify { sessionKey, code } -> { token, expiresAt }`
+- `GET /sessions -> { account: { email, totpEnabled, totpEnabledAt }, sessions: [{ room, magicLink, createdAt, endedAt, live, hasGuest }] }`  (dashboard, authenticated)
 
 ### Signaling (client <-> server, WS TEXT)
 - `hello { role: "host"|"guest", kind?: "desktop"|"web"|"mobile", client }`
