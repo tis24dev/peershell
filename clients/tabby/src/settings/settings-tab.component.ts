@@ -73,7 +73,6 @@ export class PeershellSettingsTabComponent {
     }
 
     async saveServerUrl(): Promise<void> {
-        this.config.store.peershell = this.config.store.peershell || {}
         this.config.store.peershell.serverUrl = this.serverUrl.trim() || null
         await this.config.save()
     }

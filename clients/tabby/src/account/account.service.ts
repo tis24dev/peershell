@@ -112,7 +112,8 @@ export class AccountService {
 
     /** Store the bearer token locally (config store). */
     async persist(email: string, token: string, expiresAt?: number): Promise<void> {
-        this.config.store.peershell = this.config.store.peershell || {}
+        // Top-level config keys are getter-only in Tabby: mutate the nested property, never reassign
+        // store.peershell (which throws "has only a getter"). `peershell` always exists via defaults.
         this.config.store.peershell.account = { email, token, expiresAt: expiresAt ?? null }
         await this.config.save()
     }

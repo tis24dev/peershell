@@ -171,7 +171,6 @@ export class PeershellService {
             cancelId: 1,
         })
         if (r.response === 0) {
-            this.config.store.peershell = this.config.store.peershell || {}
             this.config.store.peershell.disclaimerAck = true
             await this.config.save()
             return true
