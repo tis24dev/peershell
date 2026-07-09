@@ -254,7 +254,7 @@ th,td{border:1px solid #ccc;padding:7px;text-align:left;font-size:14px}
 </div>
 <script src="/qrcode.js"></script>
 <script>
-var T=localStorage.getItem('ps_token')||'',EM=localStorage.getItem('ps_email')||'',TOTP=false;
+var T=localStorage.getItem('ps_token')||'',EM=localStorage.getItem('ps_email')||'',TOTP=false,TOTPAT=0;
 function $(i){return document.getElementById(i)}
 function msg(t){$('msg').textContent=t||''}
 function api(m,p,b,a){var h={'content-type':'application/json'};if(a&&T)h.authorization='Bearer '+T;
@@ -277,7 +277,7 @@ var c=prompt('Reset code (from email or the server log):');if(!c)return;var np=p
 api('POST','/reset-password',{email:e,code:c,newPassword:np}).then(function(r){msg(r._s===200?'Password changed. Log in.':'Reset failed')})})}
 function logout(){api('POST','/logout',{},true).finally(function(){T='';localStorage.removeItem('ps_token');show(false)})}
 function fmt(t){return t?new Date(t).toLocaleString():'-'}
-function load(){api('GET','/sessions',null,true).then(function(r){if(r._s===401){logout();return}if(r.account)TOTP=!!r.account.totpEnabled;var b=$('rows');b.innerHTML='';
+function load(){api('GET','/sessions',null,true).then(function(r){if(r._s===401){logout();return}if(r.account){TOTP=!!r.account.totpEnabled;TOTPAT=r.account.totpEnabledAt||0}var b=$('rows');b.innerHTML='';
 (r.sessions||[]).forEach(function(s){var tr=document.createElement('tr');
 tr.innerHTML='<td class="'+(s.live?'live':'dead')+'">'+(s.live?'live':'ended')+'</td><td>'+fmt(s.createdAt)+'</td><td>'+fmt(s.endedAt)+'</td><td>'+(s.live?'<a href="'+s.magicLink+'" target="_blank">open</a>':'-')+'</td>';b.appendChild(tr)});
 if(!(r.sessions||[]).length)b.innerHTML='<tr><td colspan="4">No sessions yet.</td></tr>'})}
@@ -286,10 +286,10 @@ function showMenu(){$('smenu').style.display='block';$('pwPanel').style.display=
 function stab(w){$('smenu').style.display='none';$('pwPanel').style.display=w==='pw'?'block':'none';$('twoPanel').style.display=w==='2fa'?'block':'none';if(w==='2fa')renderTwofa()}
 function showApp(){$('settings').style.display='none';$('app').style.display='block';load()}
 function changePw(){var c=$('cur').value,n=$('np').value;api('POST','/change-password',{currentPassword:c,newPassword:n},true).then(function(r){alert(r._s===200?'Password changed':(r.error==='invalid-credentials'?'Current password is wrong':(r.error==='password-too-weak'?'New password: at least 8 characters':'Error')));if(r._s===200){$('cur').value='';$('np').value=''}})}
-function renderTwofa(){$('twofa').innerHTML=TOTP?'<p>2FA is <b>enabled</b>.</p><input id="dpw" type="password" placeholder="password"><button onclick="disable2fa()">Disable 2FA</button>':'<button onclick="setup2fa()">Enable 2FA</button>'}
+function renderTwofa(){$('twofa').innerHTML=TOTP?'<p>Status: <b>active</b>'+(TOTPAT?' (enabled on '+fmt(TOTPAT)+')':'')+'</p><input id="dpw" type="password" placeholder="password"><button onclick="disable2fa()">Disable 2FA</button>':'<p>Status: <b>not active</b></p><button onclick="setup2fa()">Enable 2FA</button>'}
 function setup2fa(){api('POST','/2fa/setup',{},true).then(function(r){if(r._s!==200){alert('Error');return}var q='';try{var qr=qrcode(0,'M');qr.addData(r.otpauthUrl);qr.make();q=qr.createImgTag(5,8)}catch(e){}$('twofa').innerHTML='<p>Scan this QR with your authenticator app, then enter the 6-digit code:</p>'+q+'<p><small>Or enter the key manually: <code>'+r.secret+'</code></small></p><input id="ec" placeholder="6-digit code" inputmode="numeric"><button onclick="enable2fa()">Confirm</button>'})}
-function enable2fa(){var c=($('ec').value||'').trim();api('POST','/2fa/enable',{code:c},true).then(function(r){if(r._s===200){TOTP=true;alert('2FA enabled');renderTwofa()}else alert('Invalid code')})}
-function disable2fa(){var p=$('dpw').value;api('POST','/2fa/disable',{password:p},true).then(function(r){if(r._s===200){TOTP=false;alert('2FA disabled');renderTwofa()}else alert('Wrong password')})}
+function enable2fa(){var c=($('ec').value||'').trim();api('POST','/2fa/enable',{code:c},true).then(function(r){if(r._s===200){TOTP=true;TOTPAT=Date.now();alert('2FA enabled');renderTwofa()}else alert('Invalid code')})}
+function disable2fa(){var p=$('dpw').value;api('POST','/2fa/disable',{password:p},true).then(function(r){if(r._s===200){TOTP=false;TOTPAT=0;alert('2FA disabled');renderTwofa()}else alert('Wrong password')})}
 show(!!T);
 </script></body></html>`
 
@@ -519,7 +519,7 @@ function startRelay(port = 0, opts = {}) {
                         }
                     })
                 return sendJson(res, 200, {
-                    account: { email: acct.email, totpEnabled: !!acct.totpEnabled },
+                    account: { email: acct.email, totpEnabled: !!acct.totpEnabled, totpEnabledAt: acct.totpEnabledAt || null },
                     sessions,
                 })
             }
@@ -670,6 +670,7 @@ function startRelay(port = 0, opts = {}) {
                         acct.totpSecret = acct.pendingTotpSecret
                         acct.pendingTotpSecret = null
                         acct.totpEnabled = true
+                        acct.totpEnabledAt = now()
                         saveStore()
                         console.log(`[peershell] 2fa enabled for ${acct.email}`)
                         return sendJson(res, 200, { ok: true })
@@ -685,6 +686,7 @@ function startRelay(port = 0, opts = {}) {
                         acct.totpEnabled = false
                         acct.totpSecret = null
                         acct.pendingTotpSecret = null
+                        acct.totpEnabledAt = null
                         saveStore()
                         console.log(`[peershell] 2fa disabled for ${acct.email}`)
                         return sendJson(res, 200, { ok: true })
