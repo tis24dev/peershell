@@ -52,7 +52,7 @@ export class MirrorController {
     private onControl(m: ControlMessage): void {
         switch (m.t) {
             case 'pin-challenge':
-                void this.answerPin(m.nonce)
+                this.answerPin(m.nonce).catch(() => this.end('pin verification failed'))
                 break
             case 'pin-fail':
                 if (m.left <= 0) {
@@ -82,7 +82,7 @@ export class MirrorController {
     private async answerPin(nonce: string): Promise<void> {
         const pin = await this.pinProvider()
         if (!pin) {
-            this.close()
+            this.end('guest-closed')
             return
         }
         const hash = await hashPin(pin, nonce)
@@ -99,7 +99,10 @@ export class MirrorController {
             return
         }
         this.endedFlag = true
+        // Notify the sink FIRST (the web client sets `stopped` in sink.ended, gating the reconnect
+        // loop), THEN tear down the transport so its `closed` state does not re-arm a reconnect.
         this.sink.ended(reason)
+        this.transport.close(1000, reason)
     }
 
     close(): void {

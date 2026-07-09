@@ -6,6 +6,7 @@ import {
 class MockTransport implements SessionTransport {
     sentControl: ControlMessage[] = []
     sentData: Array<{ peerId: number, channel: Channel, data: Uint8Array }> = []
+    closed: { code?: number, reason?: string } | null = null
     private controlCb?: (m: ControlMessage) => void
     private binaryCb?: (f: BinaryPayload) => void
 
@@ -18,7 +19,9 @@ class MockTransport implements SessionTransport {
     sendData(peerId: number, channel: Channel, data: Uint8Array): void {
         this.sentData.push({ peerId, channel, data })
     }
-    close(): void { /* noop */ }
+    close(code?: number, reason?: string): void {
+        this.closed = { code, reason }
+    }
     onControl(cb: (m: ControlMessage) => void): void {
         this.controlCb = cb
     }
@@ -128,4 +131,31 @@ it('surfaces a host resize and ends on peer-left (once)', () => {
     t.emitControl({ t: 'peer-left', reason: 'host-ended' })
     t.emitControl({ t: 'peer-left', reason: 'again' })
     expect(s.getEnded()).toBe('host-ended')
+})
+
+it('cancelling the PIN prompt ends the session AND tears down the transport', async () => {
+    const t = new MockTransport()
+    const s = mockSink()
+    const c = new MirrorController(t, s.sink, noPin)
+    c.join({ room: 'ABC234' })
+
+    t.emitControl({ t: 'pin-challenge', nonce: 'n1' })
+    await waitUntil(() => s.getEnded() !== null)
+    // Regression (#8): cancel must fire sink.ended (so the guest UI stops re-prompting) ...
+    expect(s.getEnded()).toBe('guest-closed')
+    // ... and still close the transport (its prior behavior).
+    expect(t.closed).not.toBeNull()
+})
+
+it('closes the transport whenever the session ends', () => {
+    const t = new MockTransport()
+    const s = mockSink()
+    const c = new MirrorController(t, s.sink, noPin)
+    c.join({ room: 'ABC234' })
+
+    // Regression (#9): end() must also close the transport so the web client's socket + keepalive
+    // do not leak until the server reaper reclaims them.
+    t.emitControl({ t: 'peer-left', reason: 'host-ended' })
+    expect(s.getEnded()).toBe('host-ended')
+    expect(t.closed).not.toBeNull()
 })
