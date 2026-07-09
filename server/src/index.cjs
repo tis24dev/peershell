@@ -120,16 +120,40 @@ async function deliverVerifyCode(email, code, cfg = {}, kind = 'verification') {
     return { delivered: 'log' }
 }
 
-function hashPassword(password, salt) {
-    const s = salt || crypto.randomBytes(16).toString('hex')
-    const hash = crypto.pbkdf2Sync(password, s, PBKDF2_ITERS, 32, 'sha256').toString('base64')
-    return { salt: s, hash }
+// Passwords are stored ONLY as a salted, one-way scrypt hash (memory-hard) — never plaintext, and not
+// recoverable by anyone (including us). Self-describing format: scrypt$N$r$p$saltHex$hashHex. Legacy
+// pbkdf2 accounts (salt+hash fields) still verify and are upgraded to scrypt on next successful login.
+const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 32 }
+function hashPassword(password) {
+    const salt = crypto.randomBytes(16)
+    const derived = crypto.scryptSync(password, salt, SCRYPT.keylen, { N: SCRYPT.N, r: SCRYPT.r, p: SCRYPT.p })
+    return `scrypt$${SCRYPT.N}$${SCRYPT.r}$${SCRYPT.p}$${salt.toString('hex')}$${derived.toString('hex')}`
 }
-function verifyPassword(password, salt, expected) {
-    const h = crypto.pbkdf2Sync(password, salt || '', PBKDF2_ITERS, 32, 'sha256').toString('base64')
-    const a = Buffer.from(h)
-    const b = Buffer.from(expected || '')
-    return a.length === b.length && crypto.timingSafeEqual(a, b)
+function verifyPassword(account, password) {
+    const stored = account && account.pwhash
+    if (typeof stored === 'string' && stored.startsWith('scrypt$')) {
+        const parts = stored.split('$')
+        if (parts.length !== 6) {
+            return false
+        }
+        const expected = Buffer.from(parts[5], 'hex')
+        let derived
+        try {
+            derived = crypto.scryptSync(password, Buffer.from(parts[4], 'hex'), expected.length,
+                { N: Number(parts[1]), r: Number(parts[2]), p: Number(parts[3]) })
+        } catch {
+            return false
+        }
+        return derived.length === expected.length && crypto.timingSafeEqual(derived, expected)
+    }
+    // legacy pbkdf2 (salt + base64 hash)
+    if (account && account.salt && account.hash) {
+        const h = crypto.pbkdf2Sync(password, account.salt, PBKDF2_ITERS, 32, 'sha256').toString('base64')
+        const a = Buffer.from(h)
+        const b = Buffer.from(account.hash)
+        return a.length === b.length && crypto.timingSafeEqual(a, b)
+    }
+    return false
 }
 
 // --- TOTP (RFC 6238, SHA-1/30s/6-digit) — inline, zero deps ---
@@ -497,9 +521,8 @@ function startRelay(port = 0, opts = {}) {
                             return sendJson(res, 200, { ok: true, needsVerification: true })
                         }
                         const verifyCode = crypto.randomInt(0, 1000000).toString().padStart(6, '0')
-                        const { salt, hash } = hashPassword(password)
                         const acct = {
-                            id: crypto.randomUUID(), email, salt, hash,
+                            id: crypto.randomUUID(), email, pwhash: hashPassword(password),
                             verified: false, verifyCode,
                             totpSecret: null, totpEnabled: false, pendingTotpSecret: null,
                             createdAt: now(), lastLogin: null, revoked: false,
@@ -540,7 +563,7 @@ function startRelay(port = 0, opts = {}) {
                             return sendJson(res, 429, { error: 'rate-limited', retryAfter: Math.ceil((lockUntil - now()) / 1000) })
                         }
                         const acct = findAccount(email)
-                        const ok = acct && verifyPassword(password, acct.salt, acct.hash)
+                        const ok = !!acct && verifyPassword(acct, password)
                         if (!ok) {
                             recordLoginFail(email)
                             await failDelay()
@@ -550,6 +573,11 @@ function startRelay(port = 0, opts = {}) {
                             return sendJson(res, 403, { error: 'needs-verification' })
                         }
                         loginFails.delete(email)
+                        if (!acct.pwhash) { // upgrade a legacy pbkdf2 hash to scrypt on login
+                            acct.pwhash = hashPassword(password)
+                            delete acct.salt
+                            delete acct.hash
+                        }
                         acct.lastLogin = now()
                         if (acct.totpEnabled) {
                             const sessionKey = genAuthToken()
@@ -616,7 +644,7 @@ function startRelay(port = 0, opts = {}) {
                         if (!acct) {
                             return sendJson(res, 401, { error: 'unauthorized' })
                         }
-                        if (!verifyPassword(String(body.password || ''), acct.salt, acct.hash)) {
+                        if (!verifyPassword(acct, String(body.password || ''))) {
                             return sendJson(res, 401, { error: 'invalid-credentials' })
                         }
                         acct.totpEnabled = false
@@ -672,9 +700,9 @@ function startRelay(port = 0, opts = {}) {
                         if (acct && acct.resetCode && acct.resetExpiresAt > now() &&
                             code.length === acct.resetCode.length &&
                             crypto.timingSafeEqual(Buffer.from(code), Buffer.from(acct.resetCode))) {
-                            const { salt, hash } = hashPassword(newPassword)
-                            acct.salt = salt
-                            acct.hash = hash
+                            acct.pwhash = hashPassword(newPassword)
+                            delete acct.salt
+                            delete acct.hash
                             acct.resetCode = null
                             acct.resetExpiresAt = null
                             acct.verified = true
