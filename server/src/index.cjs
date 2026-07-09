@@ -32,6 +32,10 @@ const MIN_PASSWORD = 8
 const MAX_BODY = 64 * 1024
 const LOGIN_MAX_FAILS = 5
 const LOGIN_LOCK_MS = 15 * 60 * 1000
+// Keep a loginFails entry until it has been idle for the longest possible lock (4x). This lets the
+// reaper bound the map (incl. a bogus-email flood) WITHOUT resetting an in-progress bruteforce or the
+// blocks escalation: an actively-guessing attacker refreshes `at` and is never pruned mid-attack.
+const LOGIN_FAILS_TTL_MS = LOGIN_LOCK_MS * 4
 const REG_MAX_PER_IP = 5
 const REG_WINDOW_MS = 24 * 60 * 60 * 1000
 // Auth credential carried in the WS handshake as Sec-WebSocket-Protocol: peershell.bearer.<base64url>,
@@ -433,8 +437,9 @@ function startRelay(port = 0, opts = {}) {
             return r && r.until > now() ? r.until : 0
         }
         function recordLoginFail(email) {
-            const r = loginFails.get(email) || { count: 0, until: 0, blocks: 0 }
+            const r = loginFails.get(email) || { count: 0, until: 0, blocks: 0, at: 0 }
             r.count++
+            r.at = now() // last activity, for idle-based reaping (never prune an active attack)
             if (r.count >= LOGIN_MAX_FAILS) {
                 r.blocks++
                 r.until = now() + LOGIN_LOCK_MS * Math.min(4, r.blocks)
@@ -807,6 +812,12 @@ function startRelay(port = 0, opts = {}) {
                             acct.resetExpiresAt = null
                             acct.verified = true
                             loginFails.delete(email)
+                            // Password was reset: revoke any bearer tokens still outstanding for this account.
+                            for (const t of store.tokens) {
+                                if (t.accountId === acct.id && !t.revokedAt) {
+                                    t.revokedAt = now()
+                                }
+                            }
                             saveStore()
                             return sendJson(res, 200, { ok: true })
                         }
@@ -829,6 +840,15 @@ function startRelay(port = 0, opts = {}) {
                         acct.pwhash = hashPassword(np)
                         delete acct.salt
                         delete acct.hash
+                        // A password change invalidates the account's OTHER sessions, but keeps THIS one
+                        // (the caller just proved the current password) so the client stays logged in
+                        // without having to adopt a re-issued token.
+                        const curHash = sha256hex(bearer(req))
+                        for (const t of store.tokens) {
+                            if (t.accountId === acct.id && t.tokenHash !== curHash && !t.revokedAt) {
+                                t.revokedAt = now()
+                            }
+                        }
                         saveStore()
                         return sendJson(res, 200, { ok: true })
                     }
@@ -1046,6 +1066,20 @@ function startRelay(port = 0, opts = {}) {
             for (const [k, s] of totpSessions) {
                 if (s.expiresAt < now()) {
                     totpSessions.delete(k)
+                }
+            }
+            // Prune stale rate-limit entries so the maps do not grow unbounded. For loginFails, evict
+            // only entries with no active lock AND idle past LOGIN_FAILS_TTL_MS: an in-progress bruteforce
+            // (r.until > now(), or a recent fail refreshing r.at) is always retained, so pruning cannot
+            // reset an accumulating counter or the blocks escalation (a paced attacker still gets locked).
+            for (const [k, r] of loginFails) {
+                if (r.until <= now() && now() - (r.at || 0) >= LOGIN_FAILS_TTL_MS) {
+                    loginFails.delete(k)
+                }
+            }
+            for (const [k, r] of regByIp) {
+                if (r.resetAt < now()) {
+                    regByIp.delete(k)
                 }
             }
         }, 30000)
