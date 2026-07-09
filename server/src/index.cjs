@@ -180,6 +180,66 @@ function verifyTOTP(secretB32, code, atMs, window = 1) {
     return false
 }
 
+// Minimal account dashboard served at GET / (same-origin -> no CORS). Login/register/recover, then a
+// top bar (email + logout) and the account's sessions (live + closed/expired) with times and link.
+const DASHBOARD_HTML = `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>peershell</title>
+<style>
+body{font-family:system-ui,sans-serif;margin:0;color:#111;background:#fff}
+#bar{display:none;background:#111;color:#fff;padding:10px 14px;align-items:center;justify-content:space-between}
+#bar.on{display:flex}
+#login,#app{padding:16px;max-width:720px}
+#app{display:none}
+input{display:block;margin:6px 0;padding:9px;width:280px;max-width:92%;box-sizing:border-box}
+button{padding:8px 12px;margin:3px 3px 3px 0}
+#msg{color:#a00;margin-top:8px}
+table{border-collapse:collapse;width:100%;margin-top:12px}
+th,td{border:1px solid #ccc;padding:7px;text-align:left;font-size:14px}
+.live{color:#0a0;font-weight:bold}.dead{color:#999}
+</style></head><body>
+<div id="bar"><span id="who"></span><button onclick="logout()">logout</button></div>
+<div id="login">
+<h3>peershell</h3>
+<input id="email" type="email" placeholder="email" autocomplete="username">
+<input id="pass" type="password" placeholder="password" autocomplete="current-password">
+<div><button onclick="login()">entra</button><button onclick="register()">registra</button><button onclick="recover()">recupera password</button></div>
+<div id="msg"></div>
+</div>
+<div id="app">
+<h3>Le tue sessioni</h3><button onclick="load()">aggiorna</button>
+<table><thead><tr><th>Stato</th><th>Aperta</th><th>Chiusa</th><th>Link</th></tr></thead><tbody id="rows"></tbody></table>
+</div>
+<script>
+var T=localStorage.getItem('ps_token')||'',EM=localStorage.getItem('ps_email')||'';
+function $(i){return document.getElementById(i)}
+function msg(t){$('msg').textContent=t||''}
+function api(m,p,b,a){var h={'content-type':'application/json'};if(a&&T)h.authorization='Bearer '+T;
+return fetch(p,{method:m,headers:h,body:b?JSON.stringify(b):undefined}).then(function(r){return r.json().catch(function(){return{}}).then(function(j){j._s=r.status;return j})})}
+function show(on){$('login').style.display=on?'none':'block';$('app').style.display=on?'block':'none';$('bar').className=on?'on':'';if(on){$('who').textContent=EM;load()}}
+function save(e,t){T=t;EM=e;localStorage.setItem('ps_token',t);localStorage.setItem('ps_email',e);show(true)}
+function login(){var e=$('email').value.trim().toLowerCase(),p=$('pass').value;api('POST','/login',{email:e,password:p}).then(function(r){
+if(r.needsTotp){var c=prompt('Codice 2FA:');if(!c)return;api('POST','/2fa/verify',{sessionKey:r.sessionKey,code:c}).then(function(x){x.token?save(e,x.token):msg('2FA non valido')});return}
+if(r.token){save(e,r.token);return}
+if(r.error==='needs-verification'){verify(e,p);return}
+msg(r.error==='invalid-credentials'?'Email o password non validi':(r.error||'Errore'))})}
+function verify(e,p){var c=prompt('Codice di verifica (email o log del server):');if(!c)return;api('POST','/verify-email',{email:e,code:c}).then(function(r){r._s===200?api('POST','/login',{email:e,password:p}).then(function(x){x.token?save(e,x.token):msg('Login fallito')}):msg('Codice non valido')})}
+function register(){var e=$('email').value.trim().toLowerCase(),p=$('pass').value;api('POST','/register',{email:e,password:p}).then(function(r){
+if(r.token){save(e,r.token);return}
+if(r.needsVerification){verify(e,p);return}
+if(r.alreadyRegistered){msg('Email gia registrata: entra');return}
+msg(r.error==='password-too-weak'?'Password: min 8 caratteri':(r.error==='invalid-email'?'Email non valida':(r.error||'Errore')))})}
+function recover(){var e=$('email').value.trim().toLowerCase();if(!e){msg('Inserisci l email');return}api('POST','/request-password-reset',{email:e}).then(function(){
+var c=prompt('Codice reset (email o log):');if(!c)return;var np=prompt('Nuova password (min 8):');if(!np)return;
+api('POST','/reset-password',{email:e,code:c,newPassword:np}).then(function(r){msg(r._s===200?'Password cambiata: entra':'Reset non valido')})})}
+function logout(){api('POST','/logout',{},true).finally(function(){T='';localStorage.removeItem('ps_token');show(false)})}
+function fmt(t){return t?new Date(t).toLocaleString():'-'}
+function load(){api('GET','/sessions',null,true).then(function(r){if(r._s===401){logout();return}var b=$('rows');b.innerHTML='';
+(r.sessions||[]).forEach(function(s){var tr=document.createElement('tr');
+tr.innerHTML='<td class="'+(s.live?'live':'dead')+'">'+(s.live?'viva':'morta')+'</td><td>'+fmt(s.createdAt)+'</td><td>'+fmt(s.endedAt)+'</td><td>'+(s.live?'<a href="'+s.magicLink+'" target="_blank">apri</a>':'-')+'</td>';b.appendChild(tr)});
+if(!(r.sessions||[]).length)b.innerHTML='<tr><td colspan="4">Nessuna sessione.</td></tr>'})}
+show(!!T);
+</script></body></html>`
+
 /**
  * @param {number} port
  * @param {{ host?, publicUrl?, tokenTtlMs?, authTtlMs?, requireAuth?, ephemeral?, dataDir? }} [opts]
@@ -210,12 +270,12 @@ function startRelay(port = 0, opts = {}) {
         // ---------- account store (atomic JSON, or ephemeral) ----------
         const dataDir = opts.dataDir || process.env.PEERSHELL_DATA || path.join(__dirname, '..', 'data')
         const accountsFile = path.join(dataDir, 'accounts.json')
-        let store = { accounts: [], tokens: [] }
+        let store = { accounts: [], tokens: [], shares: [] }
         let ephemeral = !!opts.ephemeral
         if (!ephemeral) {
             try {
                 const raw = JSON.parse(fs.readFileSync(accountsFile, 'utf8'))
-                store = { accounts: raw.accounts || [], tokens: raw.tokens || [] }
+                store = { accounts: raw.accounts || [], tokens: raw.tokens || [], shares: raw.shares || [] }
             } catch { /* fresh store */ }
             try {
                 fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 })
@@ -335,10 +395,28 @@ function startRelay(port = 0, opts = {}) {
             return rec.room
         }
         function dropRoom(room) {
+            endShare(room)
             rooms.delete(room)
             for (const [tok, rec] of magicTokens) {
                 if (rec.room === room) {
                     magicTokens.delete(tok)
+                }
+            }
+        }
+        // Persisted share history for the dashboard: one record per created session, closed on host exit.
+        function recordShare(room, accountId, magicLink) {
+            store.shares.push({ room, accountId: accountId || null, magicLink, createdAt: now(), endedAt: null })
+            if (store.shares.length > 1000) {
+                store.shares = store.shares.slice(-1000)
+            }
+            saveStore()
+        }
+        function endShare(room) {
+            for (let i = store.shares.length - 1; i >= 0; i--) {
+                if (store.shares[i].room === room && !store.shares[i].endedAt) {
+                    store.shares[i].endedAt = now()
+                    saveStore()
+                    return
                 }
             }
         }
@@ -366,12 +444,20 @@ function startRelay(port = 0, opts = {}) {
                 if (!acct) {
                     return sendJson(res, 401, { error: 'unauthorized' })
                 }
-                const sessions = []
-                for (const [room, e] of rooms) {
-                    if (e.accountId === acct.id) {
-                        sessions.push({ room, magicLink: e.magicLink, createdAt: e.createdAt, hasGuest: !!e.guest })
-                    }
-                }
+                const sessions = store.shares
+                    .filter(s => s.accountId === acct.id)
+                    .sort((a, b) => b.createdAt - a.createdAt)
+                    .map(s => {
+                        const live = !s.endedAt && rooms.has(s.room)
+                        return {
+                            room: s.room,
+                            magicLink: s.magicLink,
+                            createdAt: s.createdAt,
+                            endedAt: s.endedAt,
+                            live,
+                            hasGuest: live ? !!rooms.get(s.room).guest : false,
+                        }
+                    })
                 return sendJson(res, 200, {
                     account: { email: acct.email, totpEnabled: !!acct.totpEnabled },
                     sessions,
@@ -627,8 +713,13 @@ function startRelay(port = 0, opts = {}) {
             }
             const m = /^\/s\/([^/?#]+)/.exec(req.url || '')
             if (!m) {
-                res.writeHead(200, { 'content-type': 'text/plain' })
-                res.end('peershell server\n')
+                if (method === 'GET' && (url === '/' || url === '/index.html')) {
+                    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
+                    res.end(DASHBOARD_HTML)
+                } else {
+                    res.writeHead(404, { 'content-type': 'text/plain' })
+                    res.end('not found\n')
+                }
                 return
             }
             const room = magicRoom(m[1])
@@ -740,6 +831,7 @@ function startRelay(port = 0, opts = {}) {
                     })
                     magicTokens.set(token, { room, expiresAt: now() + tokenTtlMs })
                     sock._room = room
+                    recordShare(room, sock._account ? sock._account.id : null, magicLink)
                     safeSend(sock, j({ t: 'session-created', room, magicLink }), false)
                     break
                 }

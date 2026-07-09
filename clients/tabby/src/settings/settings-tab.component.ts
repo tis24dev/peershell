@@ -4,7 +4,7 @@ import { ConfigService } from 'tabby-core'
 import { AccountService } from '../account/account.service'
 import { LoginModalComponent } from '../account/login-modal.component'
 
-interface LiveSession { room: string, magicLink: string, hasGuest: boolean, createdAt: number }
+interface LiveSession { room: string, magicLink: string, hasGuest: boolean, createdAt: number, live?: boolean }
 
 /** peershell settings tab: server URL, account (login/logout), live-shares dashboard, security note. */
 @Component({
@@ -105,7 +105,7 @@ export class PeershellSettingsTabComponent {
                 this.error = r.error === 'unauthorized' ? 'Session expired — log in again.' : `Could not load shares (${r.error}).`
                 this.sessions = []
             } else {
-                this.sessions = r.sessions as LiveSession[]
+                this.sessions = (r.sessions as LiveSession[]).filter(s => s.live !== false)
             }
             this.loaded = true
         } finally {
