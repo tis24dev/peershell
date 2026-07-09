@@ -41,6 +41,9 @@ export class ShareController {
     magicLink: string | null = null
 
     private subs = new Subscription()
+    // Per-session output/resize forwarders, torn down on peer-left so a re-joining guest does not
+    // stack a second (duplicate-forwarding) pair. null when no guest is streaming.
+    private streamSubs: Subscription | null = null
     private streaming = false
     private authenticated = false
     private peerId = SINGLE_PEER
@@ -85,7 +88,8 @@ export class ShareController {
                 this.challenge()
                 break
             case 'pin-response':
-                void this.verifyResponse(m.hash)
+                this.verifyResponse(m.hash).catch(err =>
+                    this.hooks.onError?.('pin-verify-failed', err instanceof Error ? err.message : String(err)))
                 break
             case 'snapshot-ack':
                 this.beginStream()
@@ -93,6 +97,8 @@ export class ShareController {
             case 'peer-left':
                 this.streaming = false
                 this.authenticated = false
+                this.streamSubs?.unsubscribe()
+                this.streamSubs = null
                 this.hooks.onPeerLeft?.(m.reason)
                 break
             case 'error':
@@ -142,12 +148,13 @@ export class ShareController {
             return
         }
         this.streaming = true
-        this.subs.add(this.tab.output$.subscribe(data => {
+        this.streamSubs = new Subscription()
+        this.streamSubs.add(this.tab.output$.subscribe(data => {
             if (this.streaming) {
                 this.transport.sendData(this.peerId, Channel.Output, data)
             }
         }))
-        this.subs.add(this.tab.resize$.subscribe(sz => {
+        this.streamSubs.add(this.tab.resize$.subscribe(sz => {
             this.transport.sendControl({ t: 'resize', cols: sz.cols, rows: sz.rows })
         }))
     }
@@ -164,6 +171,8 @@ export class ShareController {
         this.streaming = false
         this.authenticated = false
         this.subs.unsubscribe()
+        this.streamSubs?.unsubscribe()
+        this.streamSubs = null
         this.transport.close(1000, reason)
     }
 }

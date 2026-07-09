@@ -153,3 +153,34 @@ it('tears down on tab close', async () => {
     expect(t.closed).toBe(true)
     expect(t.controlTypes()).toEqual(expect.arrayContaining(['peer-left', 'session-close']))
 })
+
+it('re-join after peer-left does not stack duplicate output/resize forwarders', async () => {
+    const t = new MockTransport()
+    const m = mockTab()
+    const c = new ShareController(t, m.tab, PIN)
+    await c.start('ws://relay')
+    t.emitControl({ t: 'session-created', room: 'ABC234', magicLink: 'http://x' })
+
+    const joinAndStream = async (): Promise<void> => {
+        const before = t.sentControl.filter(x => x.t === 'snapshot').length
+        t.emitControl({ t: 'peer-joined', peerId: 0, kind: 'web' })
+        await respond(t, t.last('pin-challenge')!.nonce, PIN)
+        await waitUntil(() => t.sentControl.filter(x => x.t === 'snapshot').length > before)
+        t.emitControl({ t: 'snapshot-ack' })
+    }
+
+    await joinAndStream()
+    m.output$.next(new Uint8Array([1]))
+    m.resize$.next({ cols: 90, rows: 30 })
+
+    t.emitControl({ t: 'peer-left', reason: 'gone' })
+
+    await joinAndStream() // fresh guest on the same controller (server keeps the host/room alive)
+    m.output$.next(new Uint8Array([2]))
+    m.resize$.next({ cols: 91, rows: 31 })
+
+    // Regression (#1): exactly one Output frame per push (2 total), not doubled by a leaked sub.
+    expect(t.sentData.filter(d => d.channel === Channel.Output)).toHaveLength(2)
+    // The resize$ handler has no streaming guard, so a leaked sub would surface here first.
+    expect(t.sentControl.filter(x => x.t === 'resize')).toHaveLength(2)
+})

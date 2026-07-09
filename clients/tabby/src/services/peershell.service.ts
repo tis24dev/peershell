@@ -144,7 +144,14 @@ export class PeershellService {
             onError: (code, message) => {
                 if (code === 'unauthorized') {
                     void this.account.clearLocal()
-                    this.notifications.error('peershell: session expired — log in and share again')
+                    // Tear the share down now (closes the WS, drops the share entry) instead of leaving a
+                    // dead session up until the 5-min establish timer fires. stopSharing does not touch
+                    // establishTimer, so clear it here.
+                    if (establishTimer) {
+                        clearTimeout(establishTimer)
+                        establishTimer = null
+                    }
+                    this.stopSharing(tab, 'peershell: session expired, log in and share again')
                 } else {
                     this.notifications.error(`peershell: ${code}`, message)
                 }
