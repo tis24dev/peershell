@@ -102,15 +102,34 @@ export class PeershellService {
         // outbound connection. Path is whitelisted inside HttpTunnelHandler (only '/').
         // eslint-disable-next-line no-new
         new HttpTunnelHandler(transport, () => webClientHtml)
+        // Grace window: a guest disconnect (closed tab or a brief network blip) does not kill the share
+        // immediately — wait ~10s for a reconnect before tearing it down.
+        let graceTimer: ReturnType<typeof setTimeout> | null = null
         const controller = new ShareController(transport, this.adapt(tab), pin, {
             onSession: h => {
                 const modal = this.ngbModal.open(ShareInfoModalComponent, { backdrop: 'static', size: 'lg' })
                 modal.componentInstance.magicLink = h.magicLink
                 modal.componentInstance.pin = pin
             },
+            onPeerJoined: () => {
+                if (graceTimer) {
+                    clearTimeout(graceTimer)
+                    graceTimer = null
+                    this.notifications.notice('peershell: guest reconnected')
+                }
+            },
             onAuthenticated: () => this.notifications.notice('peershell: guest connected'),
             onPinFailed: () => this.notifications.error('peershell: guest failed the PIN'),
-            onPeerLeft: () => this.stopSharing(tab, 'peershell: guest disconnected — sharing stopped'),
+            onPeerLeft: () => {
+                if (graceTimer) {
+                    return
+                }
+                this.notifications.notice('peershell: guest disconnected — closing in 10s unless they reconnect')
+                graceTimer = setTimeout(() => {
+                    graceTimer = null
+                    this.stopSharing(tab, 'peershell: guest gone — sharing stopped')
+                }, 10000)
+            },
             onError: (code, message) => {
                 if (code === 'unauthorized') {
                     void this.account.clearLocal()
