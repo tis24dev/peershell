@@ -28,6 +28,8 @@ export interface WebSocketLike {
 export type WebSocketCtor = new (url: string, protocols?: string | string[]) => WebSocketLike
 
 const KEEPALIVE_INTERVAL_MS = 20000
+/** Reject connect() if the handshake neither opens nor closes within this window (no silent hangs). */
+const CONNECT_TIMEOUT_MS = 15000
 
 function toUint8(data: unknown): Uint8Array {
     if (data instanceof ArrayBuffer) {
@@ -42,7 +44,6 @@ function toUint8(data: unknown): Uint8Array {
 
 export class WebSocketTransport implements SessionTransport {
     private ws: WebSocketLike | null = null
-    private state: TransportState = 'closed'
     private keepalive: ReturnType<typeof setInterval> | null = null
     private readonly WS: WebSocketCtor
     private readonly controlCbs: Array<(m: ControlMessage) => void> = []
@@ -73,18 +74,64 @@ export class WebSocketTransport implements SessionTransport {
             }
             ws.binaryType = 'arraybuffer'
             this.ws = ws
+            // Settle the connect promise exactly once. Without this guard a close/error arriving before
+            // open (or a silent hang) would leave connect() pending forever.
+            let settled = false
+            let timer: ReturnType<typeof setTimeout> | null = null
+            const clear = (): void => {
+                if (timer !== null) {
+                    clearTimeout(timer)
+                    timer = null
+                }
+            }
             ws.onopen = () => {
+                if (settled) {
+                    return
+                }
+                settled = true
+                clear()
                 this.setState('open')
                 this.startKeepalive()
                 resolve()
             }
             ws.onerror = () => {
-                if (this.state === 'connecting') {
-                    reject(new Error('peershell: WebSocket connection failed'))
+                if (settled) {
+                    return
+                }
+                settled = true
+                clear()
+                this.setState('closed')
+                reject(new Error('peershell: WebSocket connection failed'))
+            }
+            ws.onclose = () => {
+                if (!settled) {
+                    settled = true
+                    clear()
+                    this.setState('closed')
+                    reject(new Error('peershell: WebSocket closed during connect'))
+                } else {
+                    // Post-open close: normal teardown. setState('closed') stops the keepalive.
+                    this.setState('closed')
                 }
             }
-            ws.onclose = () => this.setState('closed')
             ws.onmessage = ev => this.dispatch(ev.data)
+            timer = setTimeout(() => {
+                if (settled) {
+                    return
+                }
+                settled = true
+                timer = null
+                try {
+                    ws.close()
+                } catch { /* ignore */ }
+                this.setState('closed')
+                reject(new Error('peershell: WebSocket connect timed out'))
+            }, CONNECT_TIMEOUT_MS)
+            // Don't let a pending connect timeout hold a Node process (or test runner) open.
+            const t = timer as unknown as { unref?: () => void }
+            if (typeof t.unref === 'function') {
+                t.unref()
+            }
         })
     }
 
@@ -163,7 +210,6 @@ export class WebSocketTransport implements SessionTransport {
     }
 
     private setState(s: TransportState): void {
-        this.state = s
         if (s === 'closed') {
             this.stopKeepalive()
         }

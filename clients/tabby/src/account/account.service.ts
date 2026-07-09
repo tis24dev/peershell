@@ -54,17 +54,25 @@ export class AccountService {
                 headers.authorization = `Bearer ${t}`
             }
         }
+        // Bound the request so an unresponsive server cannot strand the login modal in busy state
+        // (its Close button is [disabled]="busy"); on timeout return a distinct 'timeout' error.
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 20_000)
         let res: Response
         try {
             res = await fetch(this.base() + path, {
                 method,
                 headers,
                 body: body === undefined ? undefined : JSON.stringify(body),
+                signal: controller.signal,
             })
         } catch (err) {
+            const aborted = (err as Error)?.name === 'AbortError'
             // eslint-disable-next-line no-console
             console.error('[peershell] fetch failed:', method, this.base() + path, err)
-            return { status: 0, error: 'network-error', detail: String((err as any)?.message ?? err) }
+            return { status: 0, error: aborted ? 'timeout' : 'network-error', detail: String((err as any)?.message ?? err) }
+        } finally {
+            clearTimeout(timeout)
         }
         let json: Record<string, unknown> = {}
         try {

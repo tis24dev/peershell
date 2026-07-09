@@ -15,6 +15,7 @@ const ERRORS: Record<string, string> = {
     'too-many-attempts': 'Too many attempts. Try again later.',
     'unauthorized': 'Session expired. Please log in again.',
     'network-error': 'Cannot reach the peershell server. Check the server URL in settings.',
+    'timeout': 'The server did not respond in time. Try again.',
 }
 
 /** Login / create-account / verify / 2FA / password-reset / logout. Resolves modal.close(token) on login. */

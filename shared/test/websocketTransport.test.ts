@@ -82,3 +82,20 @@ it('stops the keepalive timer on close', async () => {
     jest.advanceTimersByTime(60000)
     expect(last.sent.length).toBe(before)
 })
+
+it('rejects connect() if the socket closes before it opens (does not hang)', async () => {
+    jest.useFakeTimers()
+    const transport = new WebSocketTransport(WS)
+    const p = transport.connect('ws://x')
+    last.onclose?.(null)
+    await expect(p).rejects.toThrow(/closed during connect/)
+})
+
+it('rejects connect() if the handshake times out (does not hang)', async () => {
+    jest.useFakeTimers()
+    const transport = new WebSocketTransport(WS)
+    const p = transport.connect('ws://x')
+    jest.advanceTimersByTime(15000)
+    await expect(p).rejects.toThrow(/timed out/)
+    expect(last.closed).toBe(true)
+})
