@@ -203,12 +203,12 @@ th,td{border:1px solid #ccc;padding:7px;text-align:left;font-size:14px}
 <h3>peershell</h3>
 <input id="email" type="email" placeholder="email" autocomplete="username">
 <input id="pass" type="password" placeholder="password" autocomplete="current-password">
-<div><button onclick="login()">entra</button><button onclick="register()">registra</button><button onclick="recover()">recupera password</button></div>
+<div><button onclick="login()">Log in</button><button onclick="register()">Register</button><button onclick="recover()">Recover password</button></div>
 <div id="msg"></div>
 </div></div>
 <div id="app">
-<h3>Le tue sessioni</h3><button onclick="load()">aggiorna</button>
-<table><thead><tr><th>Stato</th><th>Aperta</th><th>Chiusa</th><th>Link</th></tr></thead><tbody id="rows"></tbody></table>
+<h3>Your sessions</h3><button onclick="load()">Refresh</button>
+<table><thead><tr><th>Status</th><th>Opened</th><th>Closed</th><th>Link</th></tr></thead><tbody id="rows"></tbody></table>
 </div>
 <script>
 var T=localStorage.getItem('ps_token')||'',EM=localStorage.getItem('ps_email')||'';
@@ -219,25 +219,25 @@ return fetch(p,{method:m,headers:h,body:b?JSON.stringify(b):undefined}).then(fun
 function show(on){$('login').style.display=on?'none':'flex';$('app').style.display=on?'block':'none';$('bar').className=on?'on':'';if(on){$('who').textContent=EM;load()}}
 function save(e,t){T=t;EM=e;localStorage.setItem('ps_token',t);localStorage.setItem('ps_email',e);show(true)}
 function login(){var e=$('email').value.trim().toLowerCase(),p=$('pass').value;api('POST','/login',{email:e,password:p}).then(function(r){
-if(r.needsTotp){var c=prompt('Codice 2FA:');if(!c)return;api('POST','/2fa/verify',{sessionKey:r.sessionKey,code:c}).then(function(x){x.token?save(e,x.token):msg('2FA non valido')});return}
+if(r.needsTotp){var c=prompt('Two-factor code:');if(!c)return;api('POST','/2fa/verify',{sessionKey:r.sessionKey,code:c}).then(function(x){x.token?save(e,x.token):msg('Invalid two-factor code')});return}
 if(r.token){save(e,r.token);return}
 if(r.error==='needs-verification'){verify(e,p);return}
-msg(r.error==='invalid-credentials'?'Email o password non validi':(r.error||'Errore'))})}
-function verify(e,p){var c=prompt('Codice di verifica (email o log del server):');if(!c)return;api('POST','/verify-email',{email:e,code:c}).then(function(r){r._s===200?api('POST','/login',{email:e,password:p}).then(function(x){x.token?save(e,x.token):msg('Login fallito')}):msg('Codice non valido')})}
+msg(r.error==='invalid-credentials'?'Email or password is not valid':(r.error||'Error'))})}
+function verify(e,p){var c=prompt('Verification code (from email or the server log):');if(!c)return;api('POST','/verify-email',{email:e,code:c}).then(function(r){r._s===200?api('POST','/login',{email:e,password:p}).then(function(x){x.token?save(e,x.token):msg('Login failed')}):msg('Invalid code')})}
 function register(){var e=$('email').value.trim().toLowerCase(),p=$('pass').value;api('POST','/register',{email:e,password:p}).then(function(r){
 if(r.token){save(e,r.token);return}
 if(r.needsVerification){verify(e,p);return}
-if(r.alreadyRegistered){msg('Email gia registrata: entra');return}
-msg(r.error==='password-too-weak'?'Password: min 8 caratteri':(r.error==='invalid-email'?'Email non valida':(r.error||'Errore')))})}
-function recover(){var e=$('email').value.trim().toLowerCase();if(!e){msg('Inserisci l email');return}api('POST','/request-password-reset',{email:e}).then(function(){
-var c=prompt('Codice reset (email o log):');if(!c)return;var np=prompt('Nuova password (min 8):');if(!np)return;
-api('POST','/reset-password',{email:e,code:c,newPassword:np}).then(function(r){msg(r._s===200?'Password cambiata: entra':'Reset non valido')})})}
+if(r.alreadyRegistered){msg('That email is already registered. Log in.');return}
+msg(r.error==='password-too-weak'?'Password: at least 8 characters':(r.error==='invalid-email'?'Invalid email':(r.error||'Error')))})}
+function recover(){var e=$('email').value.trim().toLowerCase();if(!e){msg('Enter your email');return}api('POST','/request-password-reset',{email:e}).then(function(){
+var c=prompt('Reset code (from email or the server log):');if(!c)return;var np=prompt('New password (min 8):');if(!np)return;
+api('POST','/reset-password',{email:e,code:c,newPassword:np}).then(function(r){msg(r._s===200?'Password changed. Log in.':'Reset failed')})})}
 function logout(){api('POST','/logout',{},true).finally(function(){T='';localStorage.removeItem('ps_token');show(false)})}
 function fmt(t){return t?new Date(t).toLocaleString():'-'}
 function load(){api('GET','/sessions',null,true).then(function(r){if(r._s===401){logout();return}var b=$('rows');b.innerHTML='';
 (r.sessions||[]).forEach(function(s){var tr=document.createElement('tr');
-tr.innerHTML='<td class="'+(s.live?'live':'dead')+'">'+(s.live?'viva':'morta')+'</td><td>'+fmt(s.createdAt)+'</td><td>'+fmt(s.endedAt)+'</td><td>'+(s.live?'<a href="'+s.magicLink+'" target="_blank">apri</a>':'-')+'</td>';b.appendChild(tr)});
-if(!(r.sessions||[]).length)b.innerHTML='<tr><td colspan="4">Nessuna sessione.</td></tr>'})}
+tr.innerHTML='<td class="'+(s.live?'live':'dead')+'">'+(s.live?'live':'ended')+'</td><td>'+fmt(s.createdAt)+'</td><td>'+fmt(s.endedAt)+'</td><td>'+(s.live?'<a href="'+s.magicLink+'" target="_blank">open</a>':'-')+'</td>';b.appendChild(tr)});
+if(!(r.sessions||[]).length)b.innerHTML='<tr><td colspan="4">No sessions yet.</td></tr>'})}
 show(!!T);
 </script></body></html>`
 
