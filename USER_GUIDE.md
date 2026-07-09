@@ -162,7 +162,9 @@ host stops it automatically.
 ## 8. The web dashboard
 
 Open the server in a browser (e.g. `https://panel.peershell.dev/`) and log in. You get:
-- A top bar showing your **email** and a **logout** button.
+- A top bar with your **email**, a **settings** button, and **logout**.
+- **Settings** has two buttons: **Change password**, and **2FA** — see your two‑factor status and turn it
+  on or off. Turning it on shows a **QR code** to scan with your authenticator app (plus the text key).
 - A table of **your sessions**, both live and ended:
   - **Status** — *live* or *ended*.
   - **Opened** / **Closed** — the times.
