@@ -1,6 +1,6 @@
 {
   "name": "tabby-peershell",
-  "version": "0.1.0",
+  "version": "0.1.0-beta",
   "description": "Share your terminal session anywhere (peershell) — collaborative terminal for Tabby",
   "keywords": [
     "tabby-plugin"
