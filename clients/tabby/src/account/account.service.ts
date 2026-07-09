@@ -54,18 +54,29 @@ export class AccountService {
                 headers.authorization = `Bearer ${t}`
             }
         }
-        // Bound the request so an unresponsive server cannot strand the login modal in busy state
-        // (its Close button is [disabled]="busy"); on timeout return a distinct 'timeout' error.
+        // Bound the WHOLE request, headers AND body read, so an unresponsive server cannot strand the
+        // login modal in busy state (its Close button is [disabled]="busy"). The AbortController signal
+        // covers res.json() too, so a server that streams headers then stalls the body still times out.
         const controller = new AbortController()
         const timeout = setTimeout(() => controller.abort(), 20_000)
-        let res: Response
         try {
-            res = await fetch(this.base() + path, {
+            const res = await fetch(this.base() + path, {
                 method,
                 headers,
                 body: body === undefined ? undefined : JSON.stringify(body),
                 signal: controller.signal,
             })
+            let json: Record<string, unknown> = {}
+            try {
+                json = await res.json()
+            } catch (err) {
+                // A stalled body aborts via the same signal; surface that as a timeout, not an empty body.
+                if ((err as Error)?.name === 'AbortError') {
+                    throw err
+                }
+                /* otherwise: empty/non-json body -> keep json = {} */
+            }
+            return { status: res.status, ...json }
         } catch (err) {
             const aborted = (err as Error)?.name === 'AbortError'
             // eslint-disable-next-line no-console
@@ -74,11 +85,6 @@ export class AccountService {
         } finally {
             clearTimeout(timeout)
         }
-        let json: Record<string, unknown> = {}
-        try {
-            json = await res.json()
-        } catch { /* empty/non-json body */ }
-        return { status: res.status, ...json }
     }
 
     register(email: string, password: string): Promise<AccountApiResult> {
