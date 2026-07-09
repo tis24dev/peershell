@@ -26,6 +26,15 @@ interface LiveSession { room: string, magicLink: string, hasGuest: boolean, crea
         </div>
 
         <div class="form-line">
+            <div class="header"><div class="title">Fixed session PIN (optional)</div>
+                <div class="description">If set, every share uses this PIN. Leave empty to generate a fresh
+                    random PIN each time. At least 6 characters.</div></div>
+            <input type="text" class="form-control" [(ngModel)]="pin" (change)="savePin()"
+                placeholder="(auto-generated)" inputmode="numeric" autocomplete="off">
+        </div>
+        <div *ngIf="pinError" class="alert alert-danger py-1 px-2">{{ pinError }}</div>
+
+        <div class="form-line">
             <div class="header"><div class="title">Account</div>
                 <div class="description">{{ account.isLoggedIn() ? ('Signed in as ' + account.email) : 'Not signed in' }}</div></div>
             <div>
@@ -56,6 +65,8 @@ interface LiveSession { room: string, magicLink: string, hasGuest: boolean, crea
 })
 export class PeershellSettingsTabComponent {
     serverUrl = ''
+    pin = ''
+    pinError = ''
     sessions: LiveSession[] = []
     busy = false
     loaded = false
@@ -67,6 +78,7 @@ export class PeershellSettingsTabComponent {
         readonly account: AccountService,
     ) {
         this.serverUrl = this.config.store.peershell?.serverUrl ?? ''
+        this.pin = this.config.store.peershell?.pin ?? ''
         if (this.account.isLoggedIn()) {
             void this.refresh()
         }
@@ -74,6 +86,17 @@ export class PeershellSettingsTabComponent {
 
     async saveServerUrl(): Promise<void> {
         this.config.store.peershell.serverUrl = this.serverUrl.trim() || null
+        await this.config.save()
+    }
+
+    async savePin(): Promise<void> {
+        const v = this.pin.trim()
+        if (v && v.length < 6) {
+            this.pinError = 'PIN must be at least 6 characters (or empty to auto-generate).'
+            return
+        }
+        this.pinError = ''
+        this.config.store.peershell.pin = v || null
         await this.config.save()
     }
 

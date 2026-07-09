@@ -94,9 +94,10 @@ export class PeershellService {
             }
         }
 
-        // Per-session PIN, generated locally and shown to the host. Never sent to the server in
-        // cleartext (challenge-response only). The host shares it with the intended guest out-of-band.
-        const pin = generatePin(6)
+        // Per-session PIN, local-only (challenge-response; never sent to the server in cleartext). Use the
+        // user's fixed PIN from settings if set (>= 6 chars), otherwise generate a fresh random one.
+        const configuredPin = String(this.config.store.peershell?.pin ?? '').trim()
+        const pin = configuredPin.length >= 6 ? configuredPin : generatePin(6)
         const transport = new WebSocketTransport()
         // Serve the embedded web-client to browsers opening the magic-link, tunneled over this same
         // outbound connection. Path is whitelisted inside HttpTunnelHandler (only '/').

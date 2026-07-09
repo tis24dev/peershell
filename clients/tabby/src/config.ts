@@ -7,6 +7,7 @@ export class PeershellConfigProvider extends ConfigProvider {
             magicLinkTtlMinutes: 15,
             disclaimerAck: false,
             account: null,
+            pin: null,
         },
     }
 
