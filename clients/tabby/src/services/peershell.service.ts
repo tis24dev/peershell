@@ -32,16 +32,31 @@ export class PeershellService {
         return tab instanceof BaseTerminalTabComponent && this.shares.has(tab)
     }
 
-    async shareActive(): Promise<void> {
-        // In modern Tabby every top-level tab is a SplitTabComponent; the terminal is the focused pane.
+    /** The focused terminal pane of the active tab (SplitTabComponent-aware), or null. */
+    private focusedTerminal(): BaseTerminalTabComponent | null {
         let tab = this.app.activeTab
         if (tab instanceof SplitTabComponent) {
             tab = tab.getFocusedTab()
         }
-        if (tab instanceof BaseTerminalTabComponent) {
+        return tab instanceof BaseTerminalTabComponent ? tab : null
+    }
+
+    async shareActive(): Promise<void> {
+        const tab = this.focusedTerminal()
+        if (tab) {
             await this.startSharing(tab)
         } else {
             this.notifications.error('peershell: focus a terminal tab to share it')
+        }
+    }
+
+    /** Stop sharing the focused terminal, if it is currently shared. */
+    stopActive(): void {
+        const tab = this.focusedTerminal()
+        if (tab && this.shares.has(tab)) {
+            this.stopSharing(tab)
+        } else {
+            this.notifications.notice('peershell: this terminal is not being shared')
         }
     }
 
@@ -195,8 +210,12 @@ export class PeershellService {
             ])
             return
         }
+        const term = this.focusedTerminal()
+        const sharing = !!term && this.shares.has(term)
         this.platform.popupContextMenu([
-            { label: 'Share this terminal', click: () => { void this.shareActive() } },
+            sharing
+                ? { label: 'Stop sharing this terminal', click: () => { this.stopActive() } }
+                : { label: 'Share this terminal', click: () => { void this.shareActive() } },
             { label: 'Join a shared terminal', click: () => { void this.joinShared() } },
             { type: 'separator' },
             { label: `Log out (${this.account.email})`, click: () => { void this.logout() } },
