@@ -1,6 +1,6 @@
 {
   "name": "@peershell/web-client",
-  "version": "0.1.0-beta",
+  "version": "0.1.1-beta",
   "private": true,
   "description": "peershell standalone browser client (xterm.js), served by the host over the tunnel",
   "license": "PolyForm-Noncommercial-1.0.0",
