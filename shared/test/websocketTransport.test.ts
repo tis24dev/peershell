@@ -1,3 +1,8 @@
+/**
+ * Copyright (C) 2026 tis24dev
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
 import { WebSocketTransport, WebSocketCtor, WebSocketLike } from '../src/websocketTransport'
 import { encodeControl, encodeBinaryFrame, Channel } from '../src/protocol'
 

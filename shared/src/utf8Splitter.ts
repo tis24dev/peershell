@@ -1,4 +1,9 @@
 /**
+ * Copyright (C) 2026 tis24dev
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+/**
  * Reassembles UTF-8 text from a byte stream where multibyte codepoints may be split
  * across frames. Wraps a streaming TextDecoder (available in browsers and Node >= 18).
  *

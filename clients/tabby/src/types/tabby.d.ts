@@ -1,4 +1,9 @@
 /**
+ * Copyright (C) 2026 tis24dev
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+/**
  * Minimal ambient type shims for the Tabby host packages we import. Lets the plugin build
  * without compiling Tabby's full source tree (or installing all of Tabby's deps): the real
  * implementations are provided by Tabby at runtime (these modules are webpack externals).

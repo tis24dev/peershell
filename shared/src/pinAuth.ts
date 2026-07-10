@@ -1,4 +1,9 @@
 /**
+ * Copyright (C) 2026 tis24dev
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+/**
  * Per-session PIN challenge-response. The raw PIN never crosses the wire: the host sends a
  * fresh single-use `nonce`, the peer replies with `H(pin, nonce)`, the host verifies locally.
  *

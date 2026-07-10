@@ -1,3 +1,8 @@
+/**
+ * Copyright (C) 2026 tis24dev
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
 // Stage 0+ smoke test: load the built UMD bundle the way Tabby would (nodeRequire) with the
 // externalized host packages (@angular, tabby-*, rxjs, ...) generically stubbed, and instantiate
 // the default NgModule. Confirms the bundle is valid, @peershell/protocol is inlined, decorators

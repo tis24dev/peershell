@@ -1,4 +1,9 @@
 /**
+ * Copyright (C) 2026 tis24dev
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+/**
  * SessionTransport over a WebSocket. Framework-neutral: uses the global `WebSocket` by default
  * (Electron renderer + browsers), or an injected implementation (e.g. the `ws` package in Node tests).
  * A future WebRTC DataChannel transport can implement the same SessionTransport interface.

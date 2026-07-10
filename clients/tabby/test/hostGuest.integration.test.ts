@@ -1,4 +1,9 @@
 /**
+ * Copyright (C) 2026 tis24dev
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+/**
  * End-to-end interop of the two real controllers through the throwaway relay: ShareController (host,
  * driving a mock terminal) <-> dev relay <-> MirrorController (guest, driving a mock sink). Verifies
  * the PIN handshake, snapshot delivery + ack barrier, live output host->guest, and input guest->host.

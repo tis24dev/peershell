@@ -1,3 +1,8 @@
+/**
+ * Copyright (C) 2026 tis24dev
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
 import { Subject } from 'rxjs'
 import {
     SessionTransport, ControlMessage, BinaryPayload, Channel, TransportState, base64ToUtf8, hashPin,

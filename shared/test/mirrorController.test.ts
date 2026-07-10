@@ -1,3 +1,8 @@
+/**
+ * Copyright (C) 2026 tis24dev
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
 import {
     MirrorController, MirrorSink, PinProvider,
     SessionTransport, ControlMessage, BinaryPayload, Channel, TransportState, utf8ToBase64, hashPin,

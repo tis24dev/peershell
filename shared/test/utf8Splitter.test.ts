@@ -1,3 +1,8 @@
+/**
+ * Copyright (C) 2026 tis24dev
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
 import { Utf8Splitter } from '../src/utf8Splitter'
 import { isValidRoomCode, isAllowedTunnelPath } from '../src/api'
 

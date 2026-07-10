@@ -1,13 +1,13 @@
 {
   "name": "tabby-peershell",
-  "version": "0.1.0-beta",
+  "version": "0.1.1-beta",
   "description": "Share your terminal session anywhere (peershell): collaborative terminal for Tabby",
   "keywords": [
     "tabby-plugin"
   ],
   "main": "dist/index.js",
   "author": "tis24dev",
-  "license": "Apache-2.0",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "repository": "https://github.com/tis24dev/peershell",
   "files": [
     "dist",

@@ -1,0 +1,11 @@
+peershell — third-party attribution NOTICE
+==========================================
+
+peershell is licensed under the PolyForm Noncommercial License 1.0.0 (see
+LICENSE). It bundles the following third-party component under its own license,
+which is retained and to which the PolyForm Noncommercial terms do not apply:
+
+- server/src/qrcode.js — "QR Code Generator for JavaScript"
+  Copyright (c) 2009 Kazuhiko Arase.
+  Licensed under the MIT License (http://www.opensource.org/licenses/mit-license.php).
+  The original MIT copyright and permission notice are preserved in the file header.

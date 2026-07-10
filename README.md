@@ -72,3 +72,16 @@ Authorise the domain in Brevo and add its **DKIM** records plus SPF (`include:sp
 
 `tabby-peershell` is published to npm from `clients/tabby/` (keyword `tabby-plugin`, so Tabby's plugin
 manager can find it). See `scripts/publish-plugins.mjs`.
+
+## License
+
+Copyright (C) 2026 tis24dev
+
+Licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE). You may use,
+modify, and share this software for any noncommercial purpose, and contributions
+back via pull request are welcome. Any commercial use requires a separate license
+from the copyright holder. Previously released under Apache-2.0.
+
+Bundled third-party components keep their own licenses; see [`NOTICE`](NOTICE).
+
+See <https://polyformproject.org/licenses/noncommercial/1.0.0/> for the full terms.

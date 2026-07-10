@@ -1,4 +1,9 @@
 /**
+ * Copyright (C) 2026 tis24dev
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+/**
  * @peershell/server: rendezvous + blind relay + reverse HTTP tunnel + accounts.
  *
  * Relay: pairs one host + one guest by room-code / magic-link token, forwards every frame verbatim,

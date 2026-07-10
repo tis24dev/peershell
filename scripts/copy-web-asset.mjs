@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+/**
+ * Copyright (C) 2026 tis24dev
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
 // Copies the built, self-contained web-client HTML into the Tabby plugin so it can
 // be embedded (asset/source) and served over the outbound tunnel (httpTunnelHandler).
 // Fails loudly if the source is missing so `build:all` never silently ships a stale/absent page.

@@ -1,3 +1,8 @@
+/**
+ * Copyright (C) 2026 tis24dev
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
 /** Jest config for the monorepo (ts-jest, node env). Runs *.test.ts under shared/ and clients/. */
 module.exports = {
     testEnvironment: 'node',

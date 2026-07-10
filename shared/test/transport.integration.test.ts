@@ -1,4 +1,9 @@
 /**
+ * Copyright (C) 2026 tis24dev
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+/**
  * End-to-end wire test: two WebSocketTransport instances talk through the throwaway dev relay,
  * exercising the full Stage 1-3 handshake (hello -> create/join -> PIN challenge-response ->
  * snapshot-ack barrier -> output/input binary frames). Uses the `ws` package as the injected
