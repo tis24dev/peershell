@@ -1,3 +1,8 @@
+/**
+ * Copyright (C) 2026 tis24dev
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
 // Self-contained plugin build. Mirrors Tabby's webpack.plugin.config.mjs but imports the toolchain
 // from THIS repo's node_modules (the /opt/tabby checkout is source-only, not installed), and bundles
 // our own code + @peershell/protocol (+ xterm later). Angular/RxJS/@ng-bootstrap/ngx-toastr/tabby-*

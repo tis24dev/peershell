@@ -1,4 +1,9 @@
 /**
+ * Copyright (C) 2026 tis24dev
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+/**
  * Transport abstraction + small shared validators. The transport is framework-neutral (callback
  * based); the Tabby plugin adapts it to RxJS internally, the web/mobile clients use it directly.
  * A future WebRTC DataChannel transport implements the same interface.

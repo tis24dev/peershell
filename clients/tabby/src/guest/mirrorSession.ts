@@ -1,3 +1,8 @@
+/**
+ * Copyright (C) 2026 tis24dev
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
 import { Injector } from '@angular/core'
 import { Observable, Subject } from 'rxjs'
 import { LogService } from 'tabby-core'

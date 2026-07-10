@@ -1,4 +1,9 @@
 /**
+ * Copyright (C) 2026 tis24dev
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+/**
  * Reverse HTTP tunnel end-to-end: a Node HTTP client GETs the host's magic-link on the relay; the
  * relay forwards http-get down the host's outbound WS; the host's HttpTunnelHandler serves the
  * embedded page; the body comes back to the HTTP client. No browser needed.

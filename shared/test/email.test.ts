@@ -1,3 +1,8 @@
+/**
+ * Copyright (C) 2026 tis24dev
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
 /** Stage 7: verification-code delivery (Brevo relay) with a mock-log fallback. No network. */
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const server = require('../../server/src/index.cjs') as {

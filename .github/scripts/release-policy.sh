@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (C) 2026 tis24dev
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 # Shared release-gate helpers. Sourced by the release workflows. On write-credentialed
 # jobs it is sourced from origin/main (the trusted base), never from the pushed tag tree.
 

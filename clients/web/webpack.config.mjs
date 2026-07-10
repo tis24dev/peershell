@@ -1,3 +1,8 @@
+/**
+ * Copyright (C) 2026 tis24dev
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
 // Builds the browser web-client into a single self-contained dist/index.html (JS + CSS inlined),
 // which the host embeds and serves over the reverse tunnel. Reuses @peershell/protocol from source.
 import * as path from 'path'

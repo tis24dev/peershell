@@ -1,3 +1,8 @@
+/**
+ * Copyright (C) 2026 tis24dev
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
 import { hashPin, verifyPin, generateNonce, isAcceptablePin } from '../src/pinAuth'
 
 describe('pinAuth challenge-response', () => {

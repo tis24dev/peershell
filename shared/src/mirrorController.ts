@@ -1,4 +1,9 @@
 /**
+ * Copyright (C) 2026 tis24dev
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+/**
  * Guest side of a shared session. Framework-neutral (drives a SessionTransport + a small MirrorSink
  * port + a PIN provider), so it is reused by the Tabby plugin (via MirrorSession) and the web-client
  * (and future mobile). PIN/render/input logic lives here once.

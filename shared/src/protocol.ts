@@ -1,4 +1,9 @@
 /**
+ * Copyright (C) 2026 tis24dev
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+/**
  * peershell wire protocol: control messages + binary terminal framing.
  * Framework-neutral (no Angular/RxJS/Node-Buffer). See PROTOCOL.md for the spec.
  */

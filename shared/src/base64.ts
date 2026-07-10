@@ -1,4 +1,9 @@
 /**
+ * Copyright (C) 2026 tis24dev
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+/**
  * Portable base64 (btoa/atob are globals in browsers, Electron renderer, and Node >= 16).
  * Used for the VT snapshot payload in the `snapshot` control message.
  */

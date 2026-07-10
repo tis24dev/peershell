@@ -1,3 +1,8 @@
+/**
+ * Copyright (C) 2026 tis24dev
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
 // The publishable/workspace package.json versions must stay in lockstep (the release
 // pipeline bumps them together). Fails CI if they diverge.
 import { readFileSync } from 'node:fs'

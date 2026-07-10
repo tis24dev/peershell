@@ -1,4 +1,9 @@
 /**
+ * Copyright (C) 2026 tis24dev
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+/**
  * Stage 6 server: account REST (register/verify/login/2FA/logout/rate-limit) + WS auth-gate on
  * create-session. Runs the real server ephemeral (in-memory store) with requireAuth ON.
  */

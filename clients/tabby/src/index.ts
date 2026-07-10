@@ -1,3 +1,8 @@
+/**
+ * Copyright (C) 2026 tis24dev
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
 /* eslint-disable @typescript-eslint/no-extraneous-class */
 import { NgModule } from '@angular/core'
 import { CommonModule } from '@angular/common'

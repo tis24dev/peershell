@@ -1,4 +1,9 @@
 /**
+ * Copyright (C) 2026 tis24dev
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+/**
  * Host side of a shared session. Deliberately Tabby-agnostic: it drives a SessionTransport and a
  * small HostTerminal port, so it is fully unit-testable with mocks. PeershellService adapts a real
  * Tabby BaseTerminalTabComponent to HostTerminal.

@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+/**
+ * Copyright (C) 2026 tis24dev
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
 // Publishes the Tabby plugin (clients/tabby -> npm "tabby-peershell") from the monorepo subdir.
 // Verifies the bundle exists before publishing. Version bump/tagging is expected to be done
 // beforehand (or by CI on a release tag). Kept intentionally small.

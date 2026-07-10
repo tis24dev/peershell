@@ -1,3 +1,8 @@
+/**
+ * Copyright (C) 2026 tis24dev
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
 // Stage the loadable Tabby plugin (package.json + built dist/) and zip it to
 // tabby-peershell.zip at the repo root. The web-client HTML is bundled into
 // dist/index.js at build time, so only package.json + dist/ are needed.
